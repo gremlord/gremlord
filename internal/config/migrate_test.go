@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 )
 
 // A v0.1.x agentic install must come across intact, and the original must be
@@ -141,42 +140,21 @@ func TestGetenvPrefersCurrentPrefix(t *testing.T) {
 	}
 }
 
-// The divergence the copy cannot prevent: an agentic router still holding the
-// port keeps writing to the old database while gremlord reads the new one.
-func TestLegacyDBIsNewer(t *testing.T) {
+func TestLegacyDBPath(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	for _, d := range []string{LegacyDirName, DirName} {
-		if err := os.MkdirAll(filepath.Join(home, d), 0o700); err != nil {
-			t.Fatal(err)
-		}
+	if _, ok := LegacyDBPath(); ok {
+		t.Error("no legacy database should report absent")
 	}
-	legacy := filepath.Join(home, LegacyDirName, DBName)
-	current := filepath.Join(home, DirName, DBName)
-	for _, p := range []string{legacy, current} {
-		if err := os.WriteFile(p, []byte("db"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	// Same age: nothing to report.
-	if _, _, stale := LegacyDBIsNewer(); stale {
-		t.Error("fresh migration should not report divergence")
-	}
-
-	// Old router wrote an hour after the copy.
-	future := time.Now().Add(time.Hour)
-	if err := os.Chtimes(legacy, future, future); err != nil {
+	if err := os.MkdirAll(filepath.Join(home, LegacyDirName), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	path, behind, stale := LegacyDBIsNewer()
-	if !stale {
-		t.Fatal("a newer legacy database should be reported")
+	want := filepath.Join(home, LegacyDirName, DBName)
+	if err := os.WriteFile(want, []byte("db"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	if path != legacy {
-		t.Errorf("path = %q, want %q", path, legacy)
-	}
-	if behind < 50*time.Minute {
-		t.Errorf("behind = %v, want about an hour", behind)
+	got, ok := LegacyDBPath()
+	if !ok || got != want {
+		t.Errorf("LegacyDBPath() = %q, %v; want %q, true", got, ok, want)
 	}
 }

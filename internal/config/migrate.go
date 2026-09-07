@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 const (
@@ -165,32 +164,17 @@ func LegacyLeftBehind() (dir string, notCarried []string) {
 	return dir, notCarried
 }
 
-// LegacyDBIsNewer reports whether the pre-rename spend database has been
-// written more recently than the current one, and by how long.
-//
-// This is the one migration hazard the copy cannot prevent. The router leader
-// is whichever binary won the port, and it can be an agentic process that has
-// been up for days. New sessions health-check it, find it alive, and follow it
-// as leader -- so their spend keeps landing in ~/.agentic while `gremlord cost`
-// reads ~/.gremlord and shows nothing new. Nothing is lost, but the two
-// diverge until that old leader exits, and the copy already happened so it will
-// not run again.
-func LegacyDBIsNewer() (legacy string, behind time.Duration, ok bool) {
+// LegacyDBPath returns the pre-rename spend database path, and whether it
+// exists. Comparing it against the current one is how the migration's one
+// unavoidable hazard is detected: see doctor.
+func LegacyDBPath() (string, bool) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", 0, false
+		return "", false
 	}
-	legacy = filepath.Join(home, LegacyDirName, DBName)
-	old, err := os.Stat(legacy)
-	if err != nil {
-		return "", 0, false
+	p := filepath.Join(home, LegacyDirName, DBName)
+	if _, err := os.Stat(p); err != nil {
+		return "", false
 	}
-	cur, err := os.Stat(filepath.Join(home, DirName, DBName))
-	if err != nil {
-		return "", 0, false
-	}
-	if d := old.ModTime().Sub(cur.ModTime()); d > time.Minute {
-		return legacy, d, true
-	}
-	return "", 0, false
+	return p, true
 }

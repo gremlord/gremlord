@@ -576,3 +576,26 @@ func boolToInt(b bool) int {
 	}
 	return 0
 }
+
+// LatestEventAt returns the timestamp of the most recent usage event, and
+// whether there is one. Used to compare two databases during the agentic
+// migration, where file modification times are useless: any reader that opens
+// a database read-write touches it, so the file mtimes converge even while the
+// contents diverge.
+func (s *Store) LatestEventAt() (time.Time, bool, error) {
+	var ts sql.NullInt64
+	if err := s.db.QueryRow(`SELECT MAX(ts) FROM usage_events`).Scan(&ts); err != nil {
+		return time.Time{}, false, err
+	}
+	if !ts.Valid {
+		return time.Time{}, false, nil
+	}
+	return time.Unix(ts.Int64, 0), true, nil
+}
+
+// EventsNewerThan counts usage events recorded after t.
+func (s *Store) EventsNewerThan(t time.Time) (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM usage_events WHERE ts > ?`, t.Unix()).Scan(&n)
+	return n, err
+}
