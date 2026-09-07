@@ -46,8 +46,7 @@
 
 **Run Claude Code on any model, with a budget.** Docs and demos: [gremlord.com](https://gremlord.com)
 
-Formerly agentic — same tool, new name. Your existing config and cost history are
-carried over from `~/.agentic` the first time you run it.
+Formerly agentic — same tool, new name. See [Migrating from agentic](#migrating-from-agentic).
 
 ![gremlord demo](assets/hero.gif)
 
@@ -99,6 +98,60 @@ gremlord (launcher) ──▶ claude (unmodified, auto-updating)
 There is no daemon. The first `gremlord` session binds the router port and serves everyone; when it exits, another running session takes over within a couple of seconds. The last session out turns off the lights.
 
 Model names are aliases you define. Claude Code treats model IDs as opaque strings, so `ANTHROPIC_MODEL=grok` flows straight through and the router resolves it. Anything starting with `claude-` passes through to Anthropic untouched — background tasks keep working even when your main model is something else entirely.
+
+## Migrating from agentic
+
+Install gremlord and run it once. Your config, provider keys and full cost history
+are **copied** from `~/.agentic` to `~/.gremlord` on that first run — the originals
+are left untouched, so the old binary keeps working if you want to go back.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gremlord/gremlord/main/install.sh | sh
+gremlord setup          # repoints the statusline and the CLAUDE.md peers block
+gremlord agents sync     # replaces agentic-* subagents with gremlord-*
+gremlord doctor          # confirms the move and reports anything left behind
+```
+
+Already on the old binary? `agentic update` works for this release — it pulls the
+renamed build, which migrates on its next run. You then still want `gremlord setup`
+and `gremlord agents sync` from the list above.
+
+**Restart your sessions.** This is the one step that is easy to miss and the only
+one that loses anything. The router leader is whichever binary won the port, and an
+agentic router that has been up for days keeps serving: new sessions health-check
+it, find it alive, and follow it — so their spend keeps landing in `~/.agentic`
+while `gremlord cost` reads `~/.gremlord` and shows nothing new. Nothing is
+destroyed, but the two diverge until that old leader exits, and the copy has
+already happened so it will not run again. `gremlord doctor` detects this and
+prints the one-line `cp` that reconciles it. The old leader exits with its host
+session.
+
+What is deliberately **not** copied:
+
+| Skipped | Why |
+|---|---|
+| `evals/`, `swebench-venv/` | Large, and both embed absolute paths — a Python venv does not survive being moved. Recreate the venv if you run SWE-bench. |
+| `router.log*` | Rotates; regenerates on the next request. |
+| `router.json` | Leader discovery for a router that is gone; a stale copy would point at a dead port. |
+
+The spend database keeps the filename `agentic.db`. Renaming only the main file
+orphans its `-wal` sidecar, which is exactly the history worth preserving.
+
+Once `gremlord doctor` is happy and no old sessions remain, `rm -rf ~/.agentic`
+reclaims the rest.
+
+### Renamed surfaces
+
+`AGENTIC_*` environment variables are now `GREMLORD_*`, and `AGENTIC_INSTALL_DIR`
+is `GREMLORD_INSTALL_DIR`. The old names still work for one release, and the new
+ones win when both are set. Request headers (`X-Agentic-*` → `X-Gremlord-*`) and
+the router's control paths are written and served under both spellings this
+release, so a gremlord launcher and an agentic router coexist on the port without
+losing spend attribution.
+
+`go install github.com/maorbril/agentic@latest` no longer works and cannot be
+made to: GitHub redirects the path, but Go rejects the module because `go.mod`
+declares `github.com/gremlord/gremlord`. Use that path instead.
 
 ## Install
 

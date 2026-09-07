@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -74,6 +75,17 @@ var doctorCmd = &cobra.Command{
 		}
 
 		ensureClauder()
+
+		// The copy cannot cover this case, and every user with a session that
+		// predates the upgrade hits it, so say so loudly and give the fix.
+		if legacyDB, behind, stale := config.LegacyDBIsNewer(); stale {
+			fail++
+			fmt.Printf("✗ an agentic router is still logging spend to %s (last write %s newer than %s)\n",
+				legacyDB, behind.Round(time.Minute), filepath.Join(dataDir, config.DBName))
+			fmt.Println("  A pre-rename router still holds the port, so new sessions follow it and")
+			fmt.Println("  their spend goes to the old database. Exit those sessions, then run:")
+			fmt.Printf("    cp %s* %s/\n", legacyDB, dataDir)
+		}
 
 		if dir, notCarried := config.LegacyLeftBehind(); dir != "" {
 			fmt.Printf("· %s is still on disk; gremlord reads %s now and left the original alone\n",
