@@ -32,15 +32,25 @@ func registerStatusline() error {
 		}
 	}
 	if existing, ok := settings["statusLine"]; ok {
-		if m, ok := existing.(map[string]any); ok && m["command"] == "gremlord statusline" {
+		m, _ := existing.(map[string]any)
+		cmdStr, _ := m["command"].(string)
+		switch {
+		case cmdStr == statuslineCommand:
 			fmt.Println("✓ statusline already registered")
 			return nil
+		case isLegacyStatusline(cmdStr):
+			// Our own pre-rename entry, not a user's customisation. Without
+			// this the rename is a dead end: setup declines to touch it and
+			// doctor reports it as unregistered, with no way out but editing
+			// settings.json by hand.
+			fmt.Printf("· upgrading the pre-rename statusline (%q)\n", cmdStr)
+		default:
+			fmt.Println("· a statusline is already configured in ~/.claude/settings.json — leaving it alone")
+			fmt.Printf("  (to use gremlord's: set \"statusLine\": {\"type\":\"command\",\"command\":%q})\n", statuslineCommand)
+			return nil
 		}
-		fmt.Println("· a statusline is already configured in ~/.claude/settings.json — leaving it alone")
-		fmt.Println(`  (to use gremlord's: set "statusLine": {"type":"command","command":"gremlord statusline"})`)
-		return nil
 	}
-	settings["statusLine"] = map[string]any{"type": "command", "command": "gremlord statusline"}
+	settings["statusLine"] = map[string]any{"type": "command", "command": statuslineCommand}
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err
@@ -193,4 +203,24 @@ var setupCmd = &cobra.Command{
 		fmt.Println("\nDone. Start a session with: gremlord")
 		return nil
 	},
+}
+
+// statuslineCommand is what gremlord registers as Claude Code's statusLine.
+const statuslineCommand = "gremlord statusline"
+
+// legacyStatuslineCommands are the pre-rename spellings gremlord itself used to
+// write. Recognising them is what lets setup upgrade its own entry in place
+// while still leaving a genuinely custom statusline alone.
+var legacyStatuslineCommands = []string{
+	"agentic statusline",
+	"clauder wrap agentic statusline",
+}
+
+func isLegacyStatusline(cmd string) bool {
+	for _, c := range legacyStatuslineCommands {
+		if cmd == c {
+			return true
+		}
+	}
+	return false
 }

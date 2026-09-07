@@ -76,19 +76,29 @@ var doctorCmd = &cobra.Command{
 
 		ensureClauder()
 
-		// The copy cannot cover this case, and every user with a session that
-		// predates the upgrade hits it. Compare the newest event in each
-		// database rather than file mtimes: opening a database read-write
-		// touches the file, so this very command would mask the divergence.
+		// Divergence between the two databases is only a fault while a
+		// pre-rename router is actually alive and still writing. Once it is
+		// gone, whether to merge those events or abandon them is the user's
+		// call, so this drops to a note rather than nagging as a failure on
+		// every run.
 		if legacyDB, ok := config.LegacyDBPath(); ok {
 			if lag, rows, diverged := legacySpendLag(legacyDB, filepath.Join(dataDir, config.DBName)); diverged {
-				fail++
-				fmt.Printf("✗ an agentic router is still logging spend to %s\n", legacyDB)
-				fmt.Printf("  It holds %d event(s) gremlord cannot see, the newest %s ahead of %s.\n",
-					rows, lag.Round(time.Minute), config.DBName)
-				fmt.Println("  A pre-rename router still holds the router port, so new sessions follow")
-				fmt.Println("  it and their spend goes there. Exit those sessions, then run:")
-				fmt.Printf("    cp %s* %s/\n", legacyDB, dataDir)
+				legacyDir := filepath.Dir(legacyDB)
+				if alive, pid := legacyRouterAlive(legacyDir); alive {
+					fail++
+					fmt.Printf("✗ an agentic router (pid %d) is still logging spend to %s\n", pid, legacyDB)
+					fmt.Printf("  %d event(s) are there and not in %s, the newest %s ahead.\n",
+						rows, config.DBName, lag.Round(time.Minute))
+					fmt.Println("  It holds the router port, so new sessions follow it and their spend")
+					fmt.Println("  goes there too. Exit those sessions, then merge with:")
+					fmt.Printf("    cp %s* %s/\n", legacyDB, dataDir)
+				} else {
+					fmt.Printf("· %d event(s) exist only in the pre-rename %s (newest %s ahead)\n",
+						rows, legacyDB, lag.Round(time.Minute))
+					fmt.Printf("  No agentic router is running, so nothing is still being written there.\n")
+					fmt.Printf("  Merge them with `cp %s* %s/`, or drop them with `rm -rf %s`.\n",
+						legacyDB, dataDir, legacyDir)
+				}
 			}
 		}
 
@@ -110,7 +120,7 @@ var doctorCmd = &cobra.Command{
 				} `json:"statusLine"`
 			}
 			json.Unmarshal(data, &s)
-			check(s.StatusLine.Command == "gremlord statusline",
+			check(s.StatusLine.Command == statuslineCommand,
 				"statusline registered",
 				"statusline not registered — run `gremlord setup`")
 		}
@@ -171,4 +181,15 @@ func legacySpendLag(legacyPath, currentPath string) (lag time.Duration, rows int
 		rows = 0
 	}
 	return oldAt.Sub(newAt), rows, true
+}
+
+// legacyRouterAlive reports whether the router recorded in a pre-rename data
+// directory is still running. That is what separates an active divergence,
+// which the user has to act on, from leftover history they may simply drop.
+func legacyRouterAlive(legacyDir string) (bool, int) {
+	d, err := router.ReadDiscovery(legacyDir)
+	if err != nil {
+		return false, 0
+	}
+	return pidAlive(d.PID), d.PID
 }
