@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/maorbril/agentic/internal/peers"
+	"github.com/gremlord/gremlord/internal/peers"
 )
 
 var peersCmd = &cobra.Command{
@@ -69,7 +69,7 @@ SendMessage to "<name> [ref]".`,
 			if self != nil && len(peers.Match([]peers.Session{*self}, query)) > 0 {
 				return fmt.Errorf("%q is this session (%s) — nothing to message", query, self.Name)
 			}
-			return fmt.Errorf("no reachable session matches %q — run `agentic peers` to see them all", query)
+			return fmt.Errorf("no reachable session matches %q — run `gremlord peers` to see them all", query)
 		}
 
 		if query == "" {

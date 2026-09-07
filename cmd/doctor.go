@@ -6,18 +6,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/pricing"
-	"github.com/maorbril/agentic/internal/router"
-	"github.com/maorbril/agentic/internal/store"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/pricing"
+	"github.com/gremlord/gremlord/internal/router"
+	"github.com/gremlord/gremlord/internal/store"
 )
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
-	Short: "Diagnose the agentic installation",
+	Short: "Diagnose the gremlord installation",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fail := 0
 		check := func(ok bool, good, bad string) {
@@ -35,7 +36,7 @@ var doctorCmd = &cobra.Command{
 
 		cfg, cfgErr := config.Load()
 		if errors.Is(cfgErr, os.ErrNotExist) {
-			check(false, "", "no config — run `agentic setup`")
+			check(false, "", "no config — run `gremlord setup`")
 			return fmt.Errorf("%d problem(s)", fail)
 		}
 		check(cfgErr == nil, "config parses", fmt.Sprintf("config invalid: %v", cfgErr))
@@ -50,10 +51,10 @@ var doctorCmd = &cobra.Command{
 			}
 			check(p.Key() != "",
 				fmt.Sprintf("provider %s: %s available", name, p.APIKeyEnv),
-				fmt.Sprintf("provider %s: %s not in the environment or ~/.agentic/env", name, p.APIKeyEnv))
+				fmt.Sprintf("provider %s: %s not in the environment or ~/.gremlord/env", name, p.APIKeyEnv))
 		}
 
-		st, err := store.Open(filepath.Join(dataDir, "agentic.db"))
+		st, err := store.Open(filepath.Join(dataDir, config.DBName))
 		check(err == nil, "spend database writable", fmt.Sprintf("spend database: %v", err))
 		if err == nil {
 			st.Close()
@@ -63,7 +64,7 @@ var doctorCmd = &cobra.Command{
 		for alias, m := range cfg.Models {
 			check(prices.Has(m.ID),
 				fmt.Sprintf("model %s (%s) priced", alias, m.ID),
-				fmt.Sprintf("model %s (%s) has no pricing — spend will be untracked; add `pricing:` in config or run `agentic models update-prices`", alias, m.ID))
+				fmt.Sprintf("model %s (%s) has no pricing — spend will be untracked; add `pricing:` in config or run `gremlord models update-prices`", alias, m.ID))
 		}
 
 		if d, err := router.ReadDiscovery(dataDir); err == nil {
@@ -74,6 +75,16 @@ var doctorCmd = &cobra.Command{
 
 		ensureClauder()
 
+		if dir, notCarried := config.LegacyLeftBehind(); dir != "" {
+			fmt.Printf("· %s is still on disk; gremlord reads %s now and left the original alone\n",
+				dir, dataDir)
+			if len(notCarried) > 0 {
+				fmt.Printf("  not carried over: %s\n", strings.Join(notCarried, ", "))
+				fmt.Println("  evals/ and swebench-venv/ embed absolute paths, so recreate the venv" +
+					" if you run SWE-bench; the logs regenerate. Delete the old directory when you are done with it.")
+			}
+		}
+
 		home, _ := os.UserHomeDir()
 		if data, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json")); err == nil {
 			var s struct {
@@ -82,9 +93,9 @@ var doctorCmd = &cobra.Command{
 				} `json:"statusLine"`
 			}
 			json.Unmarshal(data, &s)
-			check(s.StatusLine.Command == "agentic statusline",
+			check(s.StatusLine.Command == "gremlord statusline",
 				"statusline registered",
-				"statusline not registered — run `agentic setup`")
+				"statusline not registered — run `gremlord setup`")
 		}
 
 		if os.Getenv("ANTHROPIC_API_KEY") != "" {

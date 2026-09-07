@@ -16,11 +16,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/maorbril/agentic/internal/anthropic"
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/launch"
-	"github.com/maorbril/agentic/internal/pricing"
-	"github.com/maorbril/agentic/internal/router"
+	"github.com/gremlord/gremlord/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/launch"
+	"github.com/gremlord/gremlord/internal/pricing"
+	"github.com/gremlord/gremlord/internal/router"
+
+	"github.com/gremlord/gremlord/internal/wire"
 )
 
 var modelsCmd = &cobra.Command{
@@ -80,10 +82,10 @@ var (
 var modelsAddCmd = &cobra.Command{
 	Use:   "add <alias>",
 	Short: "Add or update a model alias",
-	Example: `  agentic models add gpt  --provider openai --id gpt-5.2 --reasoning effort
-  agentic models add grok --provider xai --id grok-4
-  agentic models add qwen --provider local --id qwen3-coder-30b
-  agentic models add codex --provider codex`,
+	Example: `  gremlord models add gpt  --provider openai --id gpt-5.2 --reasoning effort
+  gremlord models add grok --provider xai --id grok-4
+  gremlord models add qwen --provider local --id qwen3-coder-30b
+  gremlord models add codex --provider codex`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if modelProvider == "" {
@@ -167,7 +169,7 @@ var modelsTestCmd = &cobra.Command{
 				continue
 			}
 			if !explicit && cfg.Providers[model.Provider].Type == config.ProviderCLI {
-				fmt.Printf("· %-12s (cli) — skipped; run %q to invoke it for real\n", alias, "agentic models test "+alias)
+				fmt.Printf("· %-12s (cli) — skipped; run %q to invoke it for real\n", alias, "gremlord models test "+alias)
 				continue
 			}
 			start := time.Now()
@@ -202,7 +204,8 @@ func probeModel(baseURL, token, alias string, timeout time.Duration) error {
 	req.Header.Set("x-api-key", token)
 	req.Header.Set("content-type", "application/json")
 	if cwd, err := os.Getwd(); err == nil {
-		req.Header.Set("X-Agentic-Cwd", cwd)
+		req.Header.Set(wire.HeaderCwd, cwd)
+		req.Header.Set(wire.LegacyHeaderCwd, cwd)
 	}
 	if timeout <= 0 {
 		timeout = 60 * time.Second
@@ -246,7 +249,7 @@ func ensureRouter(ctx context.Context, cfg *config.Config, dataDir string) (stri
 		return "", "", nil, err
 	}
 	port := cfg.Router.Port
-	// A router leader belongs to one agentic data directory/token. If another
+	// A router leader belongs to one gremlord data directory/token. If another
 	// install (most commonly a test with a temporary HOME) already owns the
 	// configured port, pick another local port rather than joining it and
 	// sending that unrelated leader our token/config.
@@ -268,7 +271,7 @@ func ensureRouter(ctx context.Context, cfg *config.Config, dataDir string) (stri
 	return mgr.BaseURL(), token, cancel, nil
 }
 
-const pricesURL = "https://raw.githubusercontent.com/maorbril/agentic/main/internal/pricing/prices.json"
+const pricesURL = "https://raw.githubusercontent.com/gremlord/gremlord/main/internal/pricing/prices.json"
 
 var modelsUpdatePricesCmd = &cobra.Command{
 	Use:   "update-prices",

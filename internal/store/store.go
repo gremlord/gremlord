@@ -14,7 +14,7 @@ type Store struct {
 	db *sql.DB
 }
 
-// Open opens (creating if needed) the agentic database. modernc.org/sqlite
+// Open opens (creating if needed) the gremlord database. modernc.org/sqlite
 // uses _pragma=name(value) DSN syntax; WAL lets CLI readers run while the
 // router leader holds the single write connection.
 func Open(path string) (*Store, error) {

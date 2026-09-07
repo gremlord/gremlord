@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 
-	"github.com/maorbril/agentic/internal/tokens"
+	"github.com/gremlord/gremlord/internal/tokens"
 )
 
 // The passthrough is byte-faithful by default and that is the whole point
-// of it — cache_control, signed thinking blocks, and fields agentic has
+// of it — cache_control, signed thinking blocks, and fields gremlord has
 // never heard of survive untouched. Scaling is the one deliberate
 // exception, and it stays off (factor 1) unless something asks for it:
 //

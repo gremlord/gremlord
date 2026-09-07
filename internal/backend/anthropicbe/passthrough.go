@@ -12,9 +12,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/maorbril/agentic/internal/anthropic"
-	"github.com/maorbril/agentic/internal/backend"
-	"github.com/maorbril/agentic/internal/tokens"
+	"github.com/gremlord/gremlord/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/backend"
+	"github.com/gremlord/gremlord/internal/tokens"
 )
 
 type Backend struct {
@@ -44,7 +44,7 @@ func (b *Backend) forward(ctx context.Context, call *backend.Call, w http.Respon
 		var err error
 		body, err = rewriteForModel(call.Raw, call.Route.Model.ID)
 		if err != nil {
-			anthropic.WriteError(w, 400, "invalid_request_error", "agentic: could not parse request body: "+err.Error())
+			anthropic.WriteError(w, 400, "invalid_request_error", "gremlord: could not parse request body: "+err.Error())
 			return backend.Result{Status: 400, ErrType: "invalid_request_error"}
 		}
 	}
@@ -55,7 +55,7 @@ func (b *Backend) forward(ctx context.Context, call *backend.Call, w http.Respon
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
 	if err != nil {
-		anthropic.WriteError(w, 500, "api_error", "agentic: "+err.Error())
+		anthropic.WriteError(w, 500, "api_error", "gremlord: "+err.Error())
 		return backend.Result{Status: 500, ErrType: "api_error"}
 	}
 	req.Header.Set("Content-Type", "application/json")

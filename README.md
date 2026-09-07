@@ -1,47 +1,53 @@
-# agentic
+# gremlord
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/MaorBril/agentic)](https://github.com/MaorBril/agentic/stargazers)
-[![Last commit](https://img.shields.io/github/last-commit/MaorBril/agentic)](https://github.com/MaorBril/agentic/commits/main)
-[![Go](https://img.shields.io/github/go-mod/go-version/MaorBril/agentic)](go.mod)
+[![GitHub stars](https://img.shields.io/github/stars/gremlord/gremlord)](https://github.com/gremlord/gremlord/stargazers)
+[![Last commit](https://img.shields.io/github/last-commit/gremlord/gremlord)](https://github.com/gremlord/gremlord/commits/main)
+[![Go](https://img.shields.io/github/go-mod/go-version/gremlord/gremlord)](go.mod)
 
-**Run Claude Code on any model, with a budget.** Docs and demos: [runagentic.dev](https://runagentic.dev)
+**Run Claude Code on any model, with a budget.** Docs and demos: [gremlord.com](https://gremlord.com)
 
-![agentic demo](assets/hero.gif)
+Formerly agentic — same tool, new name. Your existing config and cost history are
+carried over from `~/.agentic` the first time you run it.
 
-agentic wraps Claude Code in a thin local router. Your sessions look and feel exactly like `claude` — same TUI, same tools, same updates — but the model behind them can be Anthropic, OpenAI, xAI, or anything OpenAI-compatible (Ollama, vLLM, OpenRouter, DeepSeek, Groq). Whole tasks can also be delegated to a locally logged-in Codex or Grok CLI under your own subscription. Every routed API token is metered, priced, and checked against budgets you set.
+![gremlord demo](assets/hero.gif)
+
+<!-- TODO: hero.gif still shows the old `agentic` command name and the old
+     statusline. Re-record with `assets/hero.tape` (the tape itself is updated). -->
+
+gremlord wraps Claude Code in a thin local router. Your sessions look and feel exactly like `claude` — same TUI, same tools, same updates — but the model behind them can be Anthropic, OpenAI, xAI, or anything OpenAI-compatible (Ollama, vLLM, OpenRouter, DeepSeek, Groq). Whole tasks can also be delegated to a locally logged-in Codex or Grok CLI under your own subscription. Every routed API token is metered, priced, and checked against budgets you set.
 
 ```bash
-agentic                  # Claude Code, tracked, on your default profile
-agentic -p cheap         # same session, cheaper models
-agentic --model grok     # one-off model override
-agentic cost             # where did today's $4.31 go?
+gremlord                  # Claude Code, tracked, on your default profile
+gremlord -p cheap         # same session, cheaper models
+gremlord --model grok     # one-off model override
+gremlord cost             # where did today's $4.31 go?
 ```
 
 ## Why
 
 Claude Code is a great harness, and it keeps getting better — forking it means losing that. But it only talks to one provider, and it doesn't answer two questions you eventually ask: *how much did that session cost?* and *can I run the cheap parts on a cheap model?*
 
-agentic answers both without touching Claude Code itself. Claude Code officially supports pointing at a gateway via `ANTHROPIC_BASE_URL`; agentic is that gateway, plus the CLI around it.
+gremlord answers both without touching Claude Code itself. Claude Code officially supports pointing at a gateway via `ANTHROPIC_BASE_URL`; gremlord is that gateway, plus the CLI around it.
 
 ## Compared to other options
 
 There are three ways people solve "I want Claude Code but not locked to one provider":
 
-| | agentic | claude-code-router / claude-code-proxy forks / LiteLLM | OpenCode, Crush, Goose, Aider |
+| | gremlord | claude-code-router / claude-code-proxy forks / LiteLLM | OpenCode, Crush, Goose, Aider |
 |---|---|---|---|
 | **Harness** | Real Claude Code, unmodified, auto-updating | Real Claude Code, unmodified | Different harness entirely — own prompts, tools, TUI |
 | **Runs as** | Static Go binary, no daemon (leader election over a fixed port) | Daemon / server process you deploy and administer | Standalone CLI you run instead of Claude Code |
-| **Cost & budgets** | First-class CLI: `agentic cost`, live statusline, hard-stop daily/weekly/monthly budgets | Usually a dashboard (LiteLLM) or not built in | Varies by tool, rarely budget-gated |
+| **Cost & budgets** | First-class CLI: `gremlord cost`, live statusline, hard-stop daily/weekly/monthly budgets | Usually a dashboard (LiteLLM) or not built in | Varies by tool, rarely budget-gated |
 | **Model routing** | Aliases + a built-in LLM-classifier tier router (`auto`), sticky per turn | Rule-based routing configs; no classifier-based tiering | Manual model switch, no auto-routing |
 | **Memory** | Composes with [clauder](https://github.com/MaorBril/clauder) — separate binary, optional | Not their concern | Varies |
 
-The short version: agentic doesn't try to be a better harness than Claude Code — it keeps Claude Code exactly as Anthropic ships it and only swaps what's behind `ANTHROPIC_BASE_URL`. If you want a different agent loop altogether, OpenCode/Crush/Goose/Aider are the right layer to look at instead. If you want a gateway you deploy and administer for a team, LiteLLM is a more mature choice for that. agentic is for a single developer who wants `claude`, unmodified, with a budget and a cheap-model escape hatch, installed in one command and running with nothing to operate.
+The short version: gremlord doesn't try to be a better harness than Claude Code — it keeps Claude Code exactly as Anthropic ships it and only swaps what's behind `ANTHROPIC_BASE_URL`. If you want a different agent loop altogether, OpenCode/Crush/Goose/Aider are the right layer to look at instead. If you want a gateway you deploy and administer for a team, LiteLLM is a more mature choice for that. gremlord is for a single developer who wants `claude`, unmodified, with a budget and a cheap-model escape hatch, installed in one command and running with nothing to operate.
 
 ## How it works
 
 ```
-agentic (launcher) ──▶ claude (unmodified, auto-updating)
+gremlord (launcher) ──▶ claude (unmodified, auto-updating)
                           │  ANTHROPIC_BASE_URL
                           ▼
                    local router (127.0.0.1)
@@ -54,37 +60,37 @@ agentic (launcher) ──▶ claude (unmodified, auto-updating)
         Anthropic · OpenAI · xAI · Ollama · vLLM · OpenRouter · Codex CLI · Grok CLI · ...
 ```
 
-There is no daemon. The first `agentic` session binds the router port and serves everyone; when it exits, another running session takes over within a couple of seconds. The last session out turns off the lights.
+There is no daemon. The first `gremlord` session binds the router port and serves everyone; when it exits, another running session takes over within a couple of seconds. The last session out turns off the lights.
 
 Model names are aliases you define. Claude Code treats model IDs as opaque strings, so `ANTHROPIC_MODEL=grok` flows straight through and the router resolves it. Anything starting with `claude-` passes through to Anthropic untouched — background tasks keep working even when your main model is something else entirely.
 
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/maorbril/agentic/main/install.sh | sh
-agentic setup
+curl -fsSL https://raw.githubusercontent.com/gremlord/gremlord/main/install.sh | sh
+gremlord setup
 ```
 
-Sixty seconds later: the same `claude` you know, now with `agentic cost` telling you what today cost and a budget that stops the spend when you say so.
+Sixty seconds later: the same `claude` you know, now with `gremlord cost` telling you what today cost and a budget that stops the spend when you say so.
 
-Or from source: `go install github.com/maorbril/agentic@latest`
+Or from source: `go install github.com/gremlord/gremlord@latest`
 
-To update later, run `agentic update` (or `agentic update --check` to see if one's available without installing it). This updates agentic itself; Claude Code keeps auto-updating on its own regardless.
+To update later, run `gremlord update` (or `gremlord update --check` to see if one's available without installing it). This updates gremlord itself; Claude Code keeps auto-updating on its own regardless.
 
 ## Configure
 
-Everything lives in `~/.agentic/config.yaml`, and everything is editable from the terminal:
+Everything lives in `~/.gremlord/config.yaml`, and everything is editable from the terminal:
 
 ```bash
-agentic providers add openai --type openai --base-url https://api.openai.com/v1 \
+gremlord providers add openai --type openai --base-url https://api.openai.com/v1 \
     --key-env OPENAI_API_KEY --max-tokens-param max_completion_tokens
-agentic models add gpt --provider openai --id gpt-5.2 --reasoning effort --max-output 16384
-agentic models test gpt          # 1-token probe: did I configure it right?
+gremlord models add gpt --provider openai --id gpt-5.2 --reasoning effort --max-output 16384
+gremlord models test gpt          # 1-token probe: did I configure it right?
 
-agentic providers add codex --type cli --dialect codex --sandbox workspace-write
-agentic models add codex --provider codex   # subscription login; no API key
+gremlord providers add codex --type cli --dialect codex --sandbox workspace-write
+gremlord models add codex --provider codex   # subscription login; no API key
 
-agentic budget set --daily 25
+gremlord budget set --daily 25
 ```
 
 Edits apply to live sessions immediately — the CLI hot-reloads the running router.
@@ -106,7 +112,7 @@ Aliases backed by a `cli` provider are subagent-only: they cannot be a profile m
 Instead of picking models by hand, let a cheap LLM triage every task:
 
 ```bash
-agentic routing set auto --classifier haiku \
+gremlord routing set auto --classifier haiku \
     --deep opus --standard sonnet --light qwen
 ```
 
@@ -138,36 +144,36 @@ routing:
 Configure the same policy from the CLI with repeatable task flags; later `routing set` calls preserve existing task mappings unless a matching flag updates one:
 
 ```bash
-agentic routing set auto --classifier haiku \
+gremlord routing set auto --classifier haiku \
     --deep opus --standard sonnet --light qwen \
     --task implementation=grok --task sql_data=grok \
     --task debugging=grok --task code_review=grok \
     --task architecture=fable --task security_review=fable \
     --task critical_review=opus
-agentic routing list
+gremlord routing list
 ```
 
-A recognized task mapping takes precedence over the selected tier. Unrecognized or unmatched work uses the tier normally. If the mapped model cannot hold the request, the router falls back to the smallest eligible capability tier. Pinned sessions (`pin_tiers` / `X-Agentic-Pin-Model`) bypass task and tier classification entirely. A `cli` alias cannot appear as a classifier, tier, or task mapping; validation rejects it so auto-routing can never silently start an independent agent run in your repository. Task classification is a model-selection hint, not a security boundary; enforce sensitive-work policy separately.
+A recognized task mapping takes precedence over the selected tier. Unrecognized or unmatched work uses the tier normally. If the mapped model cannot hold the request, the router falls back to the smallest eligible capability tier. Pinned sessions (`pin_tiers` / `X-Gremlord-Pin-Model`) bypass task and tier classification entirely. A `cli` alias cannot appear as a classifier, tier, or task mapping; validation rejects it so auto-routing can never silently start an independent agent run in your repository. Task classification is a model-selection hint, not a security boundary; enforce sensitive-work policy separately.
 
 Every decision is logged, and task choices appear in the existing reason field:
 
 ```
-$ grep autoroute ~/.agentic/router.log
+$ grep autoroute ~/.gremlord/router.log
 ... alias=auto tier=standard model=grok reason=task:implementation
 ... alias=auto tier=deep model=fable reason=task:security_review
 ```
 
-`agentic cost --by model` then shows how spend actually distributed. Each turn uses one tiny tier-only or combined tier-and-task request to the classifier model (~$0.0005 with haiku). Because config parsing is strict, a config containing `tasks:` requires an agentic binary that supports task routing; older binaries reject the field instead of silently ignoring it.
+`gremlord cost --by model` then shows how spend actually distributed. Each turn uses one tiny tier-only or combined tier-and-task request to the classifier model (~$0.0005 with haiku). Because config parsing is strict, a config containing `tasks:` requires an gremlord binary that supports task routing; older binaries reject the field instead of silently ignoring it.
 
 ## Auto Goal
 
 Whenever a `routing:` alias like `auto` is in play, a second, independent classifier pass looks at each new user turn and asks a different question: not "which tier?" but "does this look like it needs a persistent loop rather than a single reply?" — monitoring a long build, retrying until a condition holds, babysitting a deploy, polling for external state.
 
-When the answer is yes, agentic doesn't (and can't) start a loop itself — the router only ever sees request and response bodies, it has no execution context inside the Claude Code process. Instead it appends a system-reminder to the request naming the harness's own mechanisms directly:
+When the answer is yes, gremlord doesn't (and can't) start a loop itself — the router only ever sees request and response bodies, it has no execution context inside the Claude Code process. Instead it appends a system-reminder to the request naming the harness's own mechanisms directly:
 
 ```
 <system-reminder>
-agentic: this task looks well suited to a recurring goal loop rather than a
+gremlord: this task looks well suited to a recurring goal loop rather than a
 single reply (polling a long build). If a persistent loop would help —
 checking back on progress, retrying until a condition holds, babysitting a
 long-running process — call ScheduleWakeup with prompt
@@ -177,7 +183,7 @@ pass.
 </system-reminder>
 ```
 
-Claude Code decides whether to act on it — the reminder is a nudge, not a command. Decisions are logged (`grep autogoal ~/.agentic/router.log`) and, like tier decisions, surfaced in the statusline (`⟳ goal (polling a long build)`).
+Claude Code decides whether to act on it — the reminder is a nudge, not a command. Decisions are logged (`grep autogoal ~/.gremlord/router.log`) and, like tier decisions, surfaced in the statusline (`⟳ goal (polling a long build)`).
 
 This rides on the same classifier alias as dynamic routing, so it's on wherever `routing: auto` is configured, at the cost of one extra cheap classifier call per new turn alongside the tier call.
 
@@ -186,11 +192,11 @@ This rides on the same classifier alias as dynamic routing, so it's on wherever 
 Claude Code sizes its auto-compact against the ~200K window of the Claude model it thinks it's talking to. Routed models rarely match that: a local qwen holds 32K, GPT holds 400K, and many models get unreliable well before their advertised limit. Declare what a model really holds and the router scales every token count it reports so the client's context gauge — and therefore auto-compact — tracks the *real* window:
 
 ```bash
-agentic models add qwen --provider local --id qwen3-coder-30b --context-window 32768
-agentic models add glm  --provider z --id glm-4.7 --context-window 200000 --effective-context 60000
+gremlord models add qwen --provider local --id qwen3-coder-30b --context-window 32768
+gremlord models add glm  --provider z --id glm-4.7 --context-window 200000 --effective-context 60000
 ```
 
-`effective_context` is the attention knob: the client compacts at 60K real tokens even though the window is nominally 200K, keeping the model in its coherent range. Pricing and budgets always record true usage; `agentic context` shows a session's true-vs-reported trajectory for tuning these numbers.
+`effective_context` is the attention knob: the client compacts at 60K real tokens even though the window is nominally 200K, keeping the model in its coherent range. Pricing and budgets always record true usage; `gremlord context` shows a session's true-vs-reported trajectory for tuning these numbers.
 
 Under `model: auto` the gauge is anchored to **one** budget for the whole rule — by default the largest window the rule can route to — so it means the same thing on every turn. Scaling per serving model instead made a conversation read 30% full on a 1M model and 95% on a 200K one, and since Claude Code compacts on whatever the last turn reported, a single cheap turn could throw away context the big model still had room for. Turns that outgrow a smaller tier are remapped up to one that fits, which the router already did for size. Set `context_gauge: min` on the rule to keep every tier reachable at any conversation length instead, or `context_gauge: model` for the old per-request behavior.
 
@@ -200,15 +206,15 @@ Details, the cost trade-off, and research methodology: [docs/context-scaling.md]
 
 Three more things keep a session from spending window on nothing:
 
-- **Estimator calibration.** Token counts for translated models are a character heuristic, deliberately biased high. The router measures that guess against what upstream actually billed (per model, from its own usage log) and corrects it, so an over-count stops being subtracted from every context budget it checks. `agentic context` prints the measured accuracy; a model needs 20 requests before its correction is trusted, and corrections are clamped so a bad sample can never shrink an estimate into a window it will not fit.
-- **Deferred tool loading.** Claude Code can hold back tool schemas — sending the deferred tools' names up front and a full schema only once the model pulls one in — but it switches that off whenever `ANTHROPIC_BASE_URL` is not a first-party Anthropic host, which the router never is. Sessions were paying every builtin and MCP schema on every request: measured at 186K of tool schemas inside a 200K frame on a session with 165 MCP tools, over the limit before the first turn. Sessions now ask for it back (`ENABLE_TOOL_SEARCH=true`). Deferral does need a model that calls `ToolSearch` when it sees a tool withheld, so a profile pinned to one that doesn't can set `tool_search: false`; an explicit value in your shell outranks both — `false` for the old eager behavior, `auto:N` to sample it. `agentic eval` pins it off so stored runs stay comparable wherever they were launched from.
-- **Cache-hit reporting.** `agentic cost` shows what share of each model's input was served from an upstream prefix cache. Prompt caching is the single largest lever on the input bill, and it was previously invisible — worth checking before reaching for anything cleverer.
+- **Estimator calibration.** Token counts for translated models are a character heuristic, deliberately biased high. The router measures that guess against what upstream actually billed (per model, from its own usage log) and corrects it, so an over-count stops being subtracted from every context budget it checks. `gremlord context` prints the measured accuracy; a model needs 20 requests before its correction is trusted, and corrections are clamped so a bad sample can never shrink an estimate into a window it will not fit.
+- **Deferred tool loading.** Claude Code can hold back tool schemas — sending the deferred tools' names up front and a full schema only once the model pulls one in — but it switches that off whenever `ANTHROPIC_BASE_URL` is not a first-party Anthropic host, which the router never is. Sessions were paying every builtin and MCP schema on every request: measured at 186K of tool schemas inside a 200K frame on a session with 165 MCP tools, over the limit before the first turn. Sessions now ask for it back (`ENABLE_TOOL_SEARCH=true`). Deferral does need a model that calls `ToolSearch` when it sees a tool withheld, so a profile pinned to one that doesn't can set `tool_search: false`; an explicit value in your shell outranks both — `false` for the old eager behavior, `auto:N` to sample it. `gremlord eval` pins it off so stored runs stay comparable wherever they were launched from.
+- **Cache-hit reporting.** `gremlord cost` shows what share of each model's input was served from an upstream prefix cache. Prompt caching is the single largest lever on the input bill, and it was previously invisible — worth checking before reaching for anything cleverer.
 
-`agentic context` also breaks down where a session's context goes — system prompt, tool schemas, conversation — since the first two are re-sent in full on every request whatever the turn is about.
+`gremlord context` also breaks down where a session's context goes — system prompt, tool schemas, conversation — since the first two are re-sent in full on every request whatever the turn is about.
 
 ## Model evaluations
 
-`agentic eval` compares a baseline model with a model under test on the same coding tasks. Each arm runs non-interactive Claude Code in isolation, records router usage and route decisions under its own session ID, and produces a patch. An optional judge sees blinded patches and verifier evidence; it never sees model names, cost, or execution order.
+`gremlord eval` compares a baseline model with a model under test on the same coding tasks. Each arm runs non-interactive Claude Code in isolation, records router usage and route decisions under its own session ID, and produces a patch. An optional judge sees blinded patches and verifier evidence; it never sees model names, cost, or execution order.
 
 There are two executor types. A local manifest supplies its repository, setup command, and verifier directly:
 
@@ -243,14 +249,14 @@ sandbox:
 The same manifest is in [`examples/swebench-smoke.yaml`](examples/swebench-smoke.yaml). SWE-bench runs require Docker and Python 3.10 or newer with the exact supported package version:
 
 ```bash
-python3 -m venv ~/.agentic/swebench-venv
-~/.agentic/swebench-venv/bin/pip install 'swebench==4.1.0'
+python3 -m venv ~/.gremlord/swebench-venv
+~/.gremlord/swebench-venv/bin/pip install 'swebench==4.1.0'
 
-agentic eval run examples/swebench-smoke.yaml \
-  --python ~/.agentic/swebench-venv/bin/python \
+gremlord eval run examples/swebench-smoke.yaml \
+  --python ~/.gremlord/swebench-venv/bin/python \
   --baseline opus --mut auto --judge sonnet \
-  --attempts 1 --timeout 45m --output ~/.agentic/evals/swebench-smoke
-agentic eval report ~/.agentic/evals/swebench-smoke
+  --attempts 1 --timeout 45m --output ~/.gremlord/evals/swebench-smoke
+gremlord eval report ~/.gremlord/evals/swebench-smoke
 ```
 
 A real one-task run comparing `kimi-k3` against `opus` produced:
@@ -275,38 +281,38 @@ A local verifier reports its verdict through its exit code: `0` passed, `2` "I c
 
 Artifacts include raw Claude output, patches, container logs, official SWE-bench reports, FAIL_TO_PASS/PASS_TO_PASS details, blinded judge mappings, per-candidate usage and route traces, pair results, the resolved dataset metadata/fingerprint, and `summary.json`. Local setup and verifier commands execute on the host, so review third-party local manifests before running them.
 
-The router writes `~/.agentic/router.log`. It is capped at 8 MiB and keeps three older generations (`router.log.1` … `.3`), so the log costs at most 32 MiB on disk. An oversized log left by an earlier version is rotated on the next write rather than truncated.
+The router writes `~/.gremlord/router.log`. It is capped at 8 MiB and keeps three older generations (`router.log.1` … `.3`), so the log costs at most 32 MiB on disk. An oversized log left by an earlier version is rotated on the next write rather than truncated.
 
 
 ## Budgets
 
-Daily, weekly, and monthly caps — global and per profile. When a cap is hit, the router refuses the *next* request with a clear message that shows up right in the Claude Code TUI; in-flight responses are never cut. Warnings surface in the statusline (`agentic setup` registers it), which shows live session and daily spend:
+Daily, weekly, and monthly caps — global and per profile. When a cap is hit, the router refuses the *next* request with a clear message that shows up right in the Claude Code TUI; in-flight responses are never cut. Warnings surface in the statusline (`gremlord setup` registers it), which shows live session and daily spend:
 
 ```
 main · sonnet · sess $0.84 · day $4.31/$25 [██░░░░]
 ```
 
-`agentic cost` breaks spend down by model, profile, or session, and `--json` gives you the raw rows.
+`gremlord cost` breaks spend down by model, profile, or session, and `--json` gives you the raw rows.
 
 ## The fine print
 
-Two things you should understand before routing through agentic:
+Two things you should understand before routing through gremlord:
 
-- **Billing.** Normal traffic through the router is billed to **API keys**, not your Claude Pro/Max subscription. OAuth credentials are never proxied. For Claude subscription billing, use a `passthrough: true` profile — normal claude, no tracking. [CLI delegation](#delegating-to-another-cli) instead bills the peer CLI's own subscription (ChatGPT or SuperGrok/X Premium+) through its cached local login, which agentic invokes but never reads. That spend happens outside the router, so delegated runs appear in `agentic cost` as $0 unpriced rows with estimated token counts and budgets cannot gate them.
-- **Fidelity.** Non-Anthropic models work through translation, but Claude Code's prompts and tool patterns are tuned for Claude, so expect them to be clunkier in the main loop. They shine as cheap workhorses for background tasks and subagents. Specific gaps: no `cache_control` breakpoints on OpenAI-dialect backends (provider-side implicit caching still shows up as cache reads, measurable with `agentic cost`), thinking blocks are display-only, Anthropic server tools (web search, code execution) are unavailable on translated models, `top_k` is dropped, stop sequences truncate to four, and token counting for translated models is a deliberate ~15% overestimate so auto-compact fires early instead of overflowing context. Set `max_output` on models whose output cap is below what Claude Code requests (it asks for 32K), and `context_window` on models whose window differs from the ~200K Claude Code assumes (see [Context scaling](#context-scaling)).
+- **Billing.** Normal traffic through the router is billed to **API keys**, not your Claude Pro/Max subscription. OAuth credentials are never proxied. For Claude subscription billing, use a `passthrough: true` profile — normal claude, no tracking. [CLI delegation](#delegating-to-another-cli) instead bills the peer CLI's own subscription (ChatGPT or SuperGrok/X Premium+) through its cached local login, which gremlord invokes but never reads. That spend happens outside the router, so delegated runs appear in `gremlord cost` as $0 unpriced rows with estimated token counts and budgets cannot gate them.
+- **Fidelity.** Non-Anthropic models work through translation, but Claude Code's prompts and tool patterns are tuned for Claude, so expect them to be clunkier in the main loop. They shine as cheap workhorses for background tasks and subagents. Specific gaps: no `cache_control` breakpoints on OpenAI-dialect backends (provider-side implicit caching still shows up as cache reads, measurable with `gremlord cost`), thinking blocks are display-only, Anthropic server tools (web search, code execution) are unavailable on translated models, `top_k` is dropped, stop sequences truncate to four, and token counting for translated models is a deliberate ~15% overestimate so auto-compact fires early instead of overflowing context. Set `max_output` on models whose output cap is below what Claude Code requests (it asks for 32K), and `context_window` on models whose window differs from the ~200K Claude Code assumes (see [Context scaling](#context-scaling)).
 
 ## Subagents on any model
 
-Claude Code's built-in Agent tool takes a fixed `model` parameter (`sonnet | opus | haiku | fable`), so a routed alias like `qwen` can't be picked through it — subagents are stuck on the Claude tiers even when your best tool for the job is something else. A subagent *definition's* `model:` frontmatter has no such limit, and behind agentic's local endpoint Claude Code passes that string straight through, so agentic generates one subagent per configured model alias:
+Claude Code's built-in Agent tool takes a fixed `model` parameter (`sonnet | opus | haiku | fable`), so a routed alias like `qwen` can't be picked through it — subagents are stuck on the Claude tiers even when your best tool for the job is something else. A subagent *definition's* `model:` frontmatter has no such limit, and behind gremlord's local endpoint Claude Code passes that string straight through, so gremlord generates one subagent per configured model alias:
 
 ```bash
-agentic agents sync     # writes ~/.claude/agents/agentic-<alias>.md, one per model alias
-agentic agents list     # what's implied by your config, and what's pending
+gremlord agents sync     # writes ~/.claude/agents/gremlord-<alias>.md, one per model alias
+gremlord agents list     # what's implied by your config, and what's pending
 ```
 
-Every model you've configured becomes selectable by name — `subagent_type: "agentic-qwen"`, `"agentic-grok"`, `"agentic-gpt-5-6-sol"` — and its traffic routes, prices, and budgets like any other agentic request. The set is derived from your own `models:` map, so it's whatever *you* configured; nothing is hardcoded.
+Every model you've configured becomes selectable by name — `subagent_type: "gremlord-qwen"`, `"gremlord-grok"`, `"gremlord-gpt-5-6-sol"` — and its traffic routes, prices, and budgets like any other gremlord request. The set is derived from your own `models:` map, so it's whatever *you* configured; nothing is hardcoded.
 
-When your aliases change, the next `agentic` launch offers to refresh them (once — decline and it stays quiet until the aliases change again; `AGENTIC_NO_AGENT_SYNC=1` opts out entirely). Only files prefixed `agentic-` are ever written or removed, so your own subagents are never touched.
+When your aliases change, the next `gremlord` launch offers to refresh them (once — decline and it stays quiet until the aliases change again; `GREMLORD_NO_AGENT_SYNC=1` opts out entirely). Only files prefixed `gremlord-` are ever written or removed, so your own subagents are never touched.
 
 Aliases backed by a `cli` provider get a deliberately different description: the generated definition tells the orchestrator that it is handing the entire task to an independent agent with filesystem access, so it writes a self-contained prompt and expects minutes of latency instead of a completion.
 
@@ -319,27 +325,27 @@ If you already pay for ChatGPT or SuperGrok, a `cli` provider can delegate a who
 codex login                       # ChatGPT subscription
 # or: grok login                  # SuperGrok / X Premium+ subscription
 
-agentic providers add codex --type cli --dialect codex --sandbox workspace-write
-agentic models add codex --provider codex
-agentic agents sync               # writes ~/.claude/agents/agentic-codex.md
+gremlord providers add codex --type cli --dialect codex --sandbox workspace-write
+gremlord models add codex --provider codex
+gremlord agents sync               # writes ~/.claude/agents/gremlord-codex.md
 ```
 
-Invoking `subagent_type: "agentic-codex"` hands that task prompt verbatim to `codex exec` (or `grok -p`) in the session's working directory. The CLI authenticates itself from its own cached login; agentic neither extracts nor reuses its OAuth token. Set `--id` on the model alias only if you want to pass a specific model to the peer CLI. Use provider `--command` to override the binary and `--timeout-ms` to override the 20-minute default.
+Invoking `subagent_type: "gremlord-codex"` hands that task prompt verbatim to `codex exec` (or `grok -p`) in the session's working directory. The CLI authenticates itself from its own cached login; gremlord neither extracts nor reuses its OAuth token. Set `--id` on the model alias only if you want to pass a specific model to the peer CLI. Use provider `--command` to override the binary and `--timeout-ms` to override the 20-minute default.
 
 This is a whole agent loop, not a model completion: expect minutes of latency, no incremental output, and real file modifications. The delegated CLI sees only the one task prompt — no conversation history, system prompt, or Claude Code tool definitions — so make it self-contained. Its final message becomes the subagent result. Failures return as final message text instead of retryable stream errors, because silently repeating a filesystem-mutating run would be unsafe.
 
-Delegation is deliberately explicit-only. A `cli` alias cannot be a profile model, `small_fast`, tier, auto classifier, or task mapping. Bulk `agentic models test` also skips CLI aliases; name one explicitly (`agentic models test codex`) only when you intend to launch a real delegation.
+Delegation is deliberately explicit-only. A `cli` alias cannot be a profile model, `small_fast`, tier, auto classifier, or task mapping. Bulk `gremlord models test` also skips CLI aliases; name one explicitly (`gremlord models test codex`) only when you intend to launch a real delegation.
 
-For Codex, choose the blast radius with `--sandbox read-only`, `workspace-write`, or `danger-full-access`. Delegation requires an `agentic`-launched session so the router receives and validates its absolute working directory; a bare `claude` session is refused rather than running the CLI in the router leader's unrelated directory.
+For Codex, choose the blast radius with `--sandbox read-only`, `workspace-write`, or `danger-full-access`. Delegation requires an `gremlord`-launched session so the router receives and validates its absolute working directory; a bare `claude` session is refused rather than running the CLI in the router leader's unrelated directory.
 
 ## Finding another session
 
 Claude Code sessions can message each other, but addressing one is awkward: session names are auto-derived from whatever that session is doing (`daily-case-runtime`), so the name you'd actually say is the project directory — and `ListAgents`, the only thing that can mint the `[ref]` a cross-session `SendMessage` needs, doesn't show directories.
 
-`agentic peers` closes that gap by matching on both:
+`gremlord peers` closes that gap by matching on both:
 
 ```
-$ agentic peers labs-service-secondlife-be
+$ gremlord peers labs-service-secondlife-be
 Best match for "labs-service-secondlife-be":
   daily-case-runtime             busy  ~/code/secondlife/labs-service         started 12h ago
 
@@ -349,13 +355,13 @@ To message it: call ListAgents for its [ref], then SendMessage to
 
 With no argument it lists every session you can reach. Sessions on a build older than Claude Code 2.1.224 register no socket and are unreachable until restarted — they're reported as a count rather than silently omitted. When a query matches several sessions equally well, it says so instead of picking one.
 
-`agentic setup` writes this workflow into `~/.claude/CLAUDE.md`, between `<!-- agentic:peers:start -->` markers, so every session — agentic-launched or plain `claude` — knows to resolve names this way. Re-running setup refreshes that block and leaves the rest of the file alone.
+`gremlord setup` writes this workflow into `~/.claude/CLAUDE.md`, between `<!-- gremlord:peers:start -->` markers, so every session — gremlord-launched or plain `claude` — knows to resolve names this way. Re-running setup refreshes that block and leaves the rest of the file alone.
 
 ## Works with clauder
 
-agentic spawns `claude` directly and grants each session an auto-approved tool set for autonomous operation (`Read Write Edit Glob Grep Bash(*) WebFetch WebSearch mcp__clauder__*`). `--name` becomes claude's own session name.
+gremlord spawns `claude` directly and grants each session an auto-approved tool set for autonomous operation (`Read Write Edit Glob Grep Bash(*) WebFetch WebSearch mcp__clauder__*`). `--name` becomes claude's own session name.
 
-Cross-instance messaging is native to Claude Code — sessions register under `~/.claude/sessions` and reach each other over a peer socket — so agentic no longer launches through `clauder wrap`. See [Finding another session](#finding-another-session) for addressing them. [clauder](https://github.com/MaorBril/clauder) remains a useful companion for **persistent memory**, which it provides over its own MCP server registration and therefore works no matter how the session was started. The two tools are independent; each works without the other.
+Cross-instance messaging is native to Claude Code — sessions register under `~/.claude/sessions` and reach each other over a peer socket — so gremlord no longer launches through `clauder wrap`. See [Finding another session](#finding-another-session) for addressing them. [clauder](https://github.com/MaorBril/clauder) remains a useful companion for **persistent memory**, which it provides over its own MCP server registration and therefore works no matter how the session was started. The two tools are independent; each works without the other.
 
 `--no-clauder` is accepted but deprecated: every session is a bare claude now, so there is no wrap layer to opt out of.
 
@@ -363,32 +369,32 @@ Cross-instance messaging is native to Claude Code — sessions register under `~
 
 | Command | What it does |
 |---|---|
-| `agentic [-p profile] [--model alias] [-- args]` | launch Claude Code (args after `--` go to claude) |
-| `agentic setup` | first-run config, token, statusline + peer-guidance registration |
-| `agentic peers [name]` | find another Claude Code session to message |
-| `agentic cost [--week\|--month] [--by model\|profile\|session]` | spend report |
-| `agentic context [session-id]` | context-fullness trajectory (true vs reported tokens) |
-| `agentic eval run/report` | paired model evaluation and artifact report |
-| `agentic agents list/sync` | subagent definitions for your model aliases |
-| `agentic models add/list/remove/test/update-prices` | model aliases (`test` skips CLI aliases unless one is named explicitly) |
-| `agentic providers add/list/remove` | API providers and official CLI delegates (`--type cli`) |
-| `agentic profiles list/show` · `agentic budget set` | profiles and caps |
-| `agentic config get/set` | any config key |
-| `agentic router run/status` | headless router / who's leader |
-| `agentic doctor` | diagnose the installation |
-| `agentic update [--check]` | update agentic itself to the latest release |
+| `gremlord [-p profile] [--model alias] [-- args]` | launch Claude Code (args after `--` go to claude) |
+| `gremlord setup` | first-run config, token, statusline + peer-guidance registration |
+| `gremlord peers [name]` | find another Claude Code session to message |
+| `gremlord cost [--week\|--month] [--by model\|profile\|session]` | spend report |
+| `gremlord context [session-id]` | context-fullness trajectory (true vs reported tokens) |
+| `gremlord eval run/report` | paired model evaluation and artifact report |
+| `gremlord agents list/sync` | subagent definitions for your model aliases |
+| `gremlord models add/list/remove/test/update-prices` | model aliases (`test` skips CLI aliases unless one is named explicitly) |
+| `gremlord providers add/list/remove` | API providers and official CLI delegates (`--type cli`) |
+| `gremlord profiles list/show` · `gremlord budget set` | profiles and caps |
+| `gremlord config get/set` | any config key |
+| `gremlord router run/status` | headless router / who's leader |
+| `gremlord doctor` | diagnose the installation |
+| `gremlord update [--check]` | update gremlord itself to the latest release |
 
 ## Keys
 
-Provider keys are referenced by environment variable name. They resolve in order: process environment → `~/.agentic/env` (a `KEY=value` file, mode 0600, created by `setup`). Put keys in `~/.agentic/env` — the router reads it directly, so sessions work no matter which shell launched them, and the config file never holds a secret.
+Provider keys are referenced by environment variable name. They resolve in order: process environment → `~/.gremlord/env` (a `KEY=value` file, mode 0600, created by `setup`). Put keys in `~/.gremlord/env` — the router reads it directly, so sessions work no matter which shell launched them, and the config file never holds a secret.
 
-`cli` providers have no agentic key: `providers list` shows `· (subscription login)`, and `base_url` / `api_key_env` are rejected. Authentication belongs entirely to the official CLI.
+`cli` providers have no gremlord key: `providers list` shows `· (subscription login)`, and `base_url` / `api_key_env` are rejected. Authentication belongs entirely to the official CLI.
 
 ## Security notes
 
 The router binds `127.0.0.1` only and requires a per-install token (created by `setup`, mode 0600), so other local processes can't spend on your keys.
 
-CLI delegation starts a local subprocess with filesystem access in the launching session's working directory. The launcher carries that directory in `X-Agentic-Cwd`; the backend requires an absolute existing directory before spawning anything. Codex's `--sandbox` setting controls its write scope. Treat `danger-full-access` accordingly.
+CLI delegation starts a local subprocess with filesystem access in the launching session's working directory. The launcher carries that directory in `X-Gremlord-Cwd`; the backend requires an absolute existing directory before spawning anything. Codex's `--sandbox` setting controls its write scope. Treat `danger-full-access` accordingly.
 
 ## License
 

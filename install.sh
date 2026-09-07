@@ -1,9 +1,12 @@
 #!/bin/sh
-# agentic installer — downloads the latest release binary to ~/.local/bin.
+# gremlord installer — downloads the latest release binary to ~/.local/bin.
+# Formerly agentic; your config and cost history are carried over on first run.
 set -e
 
-REPO="maorbril/agentic"
-INSTALL_DIR="${AGENTIC_INSTALL_DIR:-$HOME/.local/bin}"
+REPO="gremlord/gremlord"
+# GREMLORD_INSTALL_DIR is the current name; AGENTIC_INSTALL_DIR still works
+# for one release so existing install scripts keep placing the binary.
+INSTALL_DIR="${GREMLORD_INSTALL_DIR:-${AGENTIC_INSTALL_DIR:-$HOME/.local/bin}}"
 
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 arch=$(uname -m)
@@ -59,14 +62,14 @@ if [ -z "$tag" ]; then
   exit 1
 fi
 
-asset="agentic-$os-$arch"
+asset="gremlord-$os-$arch"
 url="https://github.com/$REPO/releases/download/$tag/$asset"
 mkdir -p "$INSTALL_DIR"
 echo "Downloading $asset ($tag)..."
-curl -fsSL -o "$INSTALL_DIR/agentic" "$url"
-chmod +x "$INSTALL_DIR/agentic"
+curl -fsSL -o "$INSTALL_DIR/gremlord" "$url"
+chmod +x "$INSTALL_DIR/gremlord"
 
-echo "Installed agentic $tag to $INSTALL_DIR/agentic"
+echo "Installed gremlord $tag to $INSTALL_DIR/gremlord"
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
   *) echo "NOTE: $INSTALL_DIR is not on your PATH — add it to your shell profile." ;;
@@ -75,4 +78,4 @@ esac
 prompt_install claude "claude CLI" https://claude.ai/install.sh bash
 prompt_install clauder "clauder (persistent memory, optional)" https://raw.githubusercontent.com/MaorBril/clauder/main/install.sh sh
 
-echo "Next: agentic setup"
+echo "Next: gremlord setup"

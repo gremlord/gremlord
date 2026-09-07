@@ -38,10 +38,10 @@ func TestWriteSWEBenchPredictionsOfficialSchema(t *testing.T) {
 		{InstanceID: "django__django-11001", ModelPatch: "diff --git a/a b/a\n"},
 		{InstanceID: "sympy__sympy-20590", ModelNameOrPath: "other", ModelPatch: "patch"},
 	}
-	if err := validateSWEBenchPredictions(predictions, "agentic/auto"); err != nil {
+	if err := validateSWEBenchPredictions(predictions, "gremlord/auto"); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeSWEBenchPredictions(path, predictions, "agentic/auto"); err != nil {
+	if err := writeSWEBenchPredictions(path, predictions, "gremlord/auto"); err != nil {
 		t.Fatal(err)
 	}
 	f, err := os.Open(path)
@@ -61,7 +61,7 @@ func TestWriteSWEBenchPredictionsOfficialSchema(t *testing.T) {
 	if err := s.Err(); err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 || got[0].ModelNameOrPath != "agentic/auto" || got[1].ModelNameOrPath != "other" || got[0].ModelPatch != predictions[0].ModelPatch {
+	if len(got) != 2 || got[0].ModelNameOrPath != "gremlord/auto" || got[1].ModelNameOrPath != "other" || got[0].ModelPatch != predictions[0].ModelPatch {
 		t.Fatalf("predictions = %#v", got)
 	}
 }

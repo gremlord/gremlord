@@ -1,8 +1,8 @@
 package router
 
 import (
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/tokens"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/tokens"
 )
 
 // gaugeBudget resolves the one context budget a dynamically-routed

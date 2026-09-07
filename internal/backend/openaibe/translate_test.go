@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maorbril/agentic/internal/anthropic"
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/openai"
+	"github.com/gremlord/gremlord/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/openai"
 )
 
 func route(maxTokensParam, reasoning string) config.Resolved {
@@ -254,7 +254,7 @@ func TestToolUseIDSanitizesInvalidCharacters(t *testing.T) {
 		"TaskOutput:12":               "TaskOutput_12",
 		"call_a":                      "call_a",
 		"toolu_1":                     "toolu_1",
-		"":                            "toolu_agentic_missing",
+		"":                            "toolu_gremlord_missing",
 		"functions.read_file:0":       "functions_read_file_0",
 		"mcp__clauder__get_context:0": "mcp__clauder__get_context_0",
 	}

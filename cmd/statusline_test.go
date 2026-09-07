@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maorbril/agentic/internal/config"
+	"github.com/gremlord/gremlord/internal/config"
 )
 
 // TestStatusLineBudgetSuffixAttachesToDaySpend guards against a regression

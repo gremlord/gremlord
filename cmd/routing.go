@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/maorbril/agentic/internal/config"
+	"github.com/gremlord/gremlord/internal/config"
 )
 
 var (
@@ -32,7 +32,7 @@ var routingSetCmd = &cobra.Command{
 	Long: `A routing alias classifies each new user turn with a cheap model and
 dispatches it to a tier. Use it like any model: /model auto, or
 profiles: {model: auto}.`,
-	Example: `  agentic routing set auto --classifier haiku \
+	Example: `  gremlord routing set auto --classifier haiku \
       --deep opus --standard sonnet --light qwen \
       --task security_review=fable --task critical_review=opus`,
 	Args: cobra.ExactArgs(1),
@@ -131,7 +131,7 @@ var routingListCmd = &cobra.Command{
 			return err
 		}
 		if len(cfg.Routing) == 0 {
-			fmt.Println("no routing aliases — create one with `agentic routing set`")
+			fmt.Println("no routing aliases — create one with `gremlord routing set`")
 			return nil
 		}
 		tw := tabwriter.NewWriter(os.Stdout, 2, 4, 2, ' ', 0)

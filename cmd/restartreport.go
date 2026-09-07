@@ -8,9 +8,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/router"
-	"github.com/maorbril/agentic/internal/store"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/router"
+	"github.com/gremlord/gremlord/internal/store"
 )
 
 // printRestartReport lists what is still running an old binary after an
@@ -33,18 +33,18 @@ func printRestartReport(newTag string) {
 		case d.Version == newTag:
 			line += "  — already on the new version"
 		default:
-			line += "  — exits with its host session, or restart `agentic router run`"
+			line += "  — exits with its host session, or restart `gremlord router run`"
 		}
 		lines = append(lines, line)
 	}
 
-	if st, err := store.OpenReadOnly(filepath.Join(dataDir, "agentic.db")); err == nil {
+	if st, err := store.OpenReadOnly(filepath.Join(dataDir, config.DBName)); err == nil {
 		defer st.Close()
 		sessions, _ := st.ActiveSessions()
 		const maxListed = 20
 		for i, s := range sessions {
 			if i == maxListed {
-				lines = append(lines, fmt.Sprintf("  … and %d more (see `agentic cost --by session`)", len(sessions)-maxListed))
+				lines = append(lines, fmt.Sprintf("  … and %d more (see `gremlord cost --by session`)", len(sessions)-maxListed))
 				break
 			}
 			line := fmt.Sprintf("  session %-28s profile %-10s %s  started %s",
@@ -65,7 +65,7 @@ func printRestartReport(newTag string) {
 		fmt.Println("Nothing is running the old version — new sessions pick up the update automatically.")
 		return
 	}
-	fmt.Printf("Still on the old binary until restarted (exit and re-run `agentic`):\n")
+	fmt.Printf("Still on the old binary until restarted (exit and re-run `gremlord`):\n")
 	for _, l := range lines {
 		fmt.Println(l)
 	}

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/maorbril/agentic/internal/anthropic"
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/openai"
+	"github.com/gremlord/gremlord/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/openai"
 )
 
 // maxToolCallsPerMessage is OpenAI's hard cap on messages[].tool_calls

@@ -12,7 +12,7 @@ package tokens
 import (
 	"unicode/utf8"
 
-	"github.com/maorbril/agentic/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/anthropic"
 )
 
 const (

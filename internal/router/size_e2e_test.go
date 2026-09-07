@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/store"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/store"
 )
 
 // newSizedServer builds a router whose "tiny" model has a 1000-token budget,

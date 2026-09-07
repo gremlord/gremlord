@@ -1,5 +1,5 @@
 {
-  "_comment": "USD per million tokens, keyed by upstream model ID. Anthropic prices cached 2026-07-17. Non-Anthropic models: add here via `agentic models update-prices`, or set `pricing:` in ~/.agentic/config.yaml. cache_read ~= 0.1x input; cache_write ~= 1.25x input (5m TTL).",
+  "_comment": "USD per million tokens, keyed by upstream model ID. Anthropic prices cached 2026-07-17. Non-Anthropic models: add here via `gremlord models update-prices`, or set `pricing:` in ~/.gremlord/config.yaml. cache_read ~= 0.1x input; cache_write ~= 1.25x input (5m TTL).",
   "claude-fable-5":    {"input": 10.0, "output": 50.0, "cache_read": 1.0,  "cache_write": 12.5},
   "claude-opus-4-8":   {"input": 5.0,  "output": 25.0, "cache_read": 0.5,  "cache_write": 6.25},
   "claude-opus-4-7":   {"input": 5.0,  "output": 25.0, "cache_read": 0.5,  "cache_write": 6.25},

@@ -7,20 +7,20 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/maorbril/agentic/internal/clauder"
-	"github.com/maorbril/agentic/internal/router"
-	"github.com/maorbril/agentic/internal/selfupdate"
+	"github.com/gremlord/gremlord/internal/clauder"
+	"github.com/gremlord/gremlord/internal/router"
+	"github.com/gremlord/gremlord/internal/selfupdate"
 )
 
 var flagUpdateCheck bool
 
 var updateCmd = &cobra.Command{
 	Use:   "update",
-	Short: "Update agentic itself to the latest release",
-	Long: `Checks GitHub for the latest agentic release and, if newer than the
+	Short: "Update gremlord itself to the latest release",
+	Long: `Checks GitHub for the latest gremlord release and, if newer than the
 running binary, downloads it and replaces the current executable in place.
 
-This updates agentic only — Claude Code updates itself independently.`,
+This updates gremlord only — Claude Code updates itself independently.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 
@@ -33,15 +33,15 @@ This updates agentic only — Claude Code updates itself independently.`,
 		latest := strings.TrimPrefix(rel.TagName, "v")
 
 		if router.Version == "dev" {
-			fmt.Fprintln(os.Stderr, "agentic: running a dev build, version comparison skipped")
+			fmt.Fprintln(os.Stderr, "gremlord: running a dev build, version comparison skipped")
 		} else if current == latest {
-			fmt.Printf("agentic %s is already the latest version.\n", router.Version)
+			fmt.Printf("gremlord %s is already the latest version.\n", router.Version)
 			return nil
 		}
 
-		fmt.Printf("agentic %s -> %s\n", router.Version, rel.TagName)
+		fmt.Printf("gremlord %s -> %s\n", router.Version, rel.TagName)
 		if flagUpdateCheck {
-			fmt.Println("Run `agentic update` (without --check) to install.")
+			fmt.Println("Run `gremlord update` (without --check) to install.")
 			printRestartReport(rel.TagName)
 			return nil
 		}
@@ -70,9 +70,9 @@ This updates agentic only — Claude Code updates itself independently.`,
 		// is session-to-session only, with no CLI to reach it from out here,
 		// so we still notify through clauder — which registers instances from
 		// its MCP server and so sees sessions we no longer wrap.
-		msg := fmt.Sprintf("[agentic] agentic was updated to %s. If this session was launched via `agentic`, "+
+		msg := fmt.Sprintf("[gremlord] gremlord was updated to %s. If this session was launched via `gremlord`, "+
 			"its router is still running the old version — please tell the user this session should be "+
-			"restarted (exit and re-run `agentic`) at a convenient moment to pick up the update.", rel.TagName)
+			"restarted (exit and re-run `gremlord`) at a convenient moment to pick up the update.", rel.TagName)
 		if n := clauder.Broadcast(msg); n > 0 {
 			fmt.Printf("Notified %d running instance(s) via clauder to restart when convenient.\n", n)
 		}

@@ -13,14 +13,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/store"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/store"
+
+	"github.com/gremlord/gremlord/internal/wire"
 )
 
 // Version is stamped at build time via -ldflags.
 var Version = "dev"
 
-// Discovery is written to ~/.agentic/router.json by the current leader.
+// Discovery is written to ~/.gremlord/router.json by the current leader.
 type Discovery struct {
 	PID       int    `json:"pid"`
 	Port      int    `json:"port"`
@@ -42,7 +44,7 @@ type Manager struct {
 func (m *Manager) BaseURL() string { return fmt.Sprintf("http://127.0.0.1:%d", m.Port) }
 
 // Run maintains leadership until ctx is canceled. It first tries to become
-// leader; if the port is held by a healthy agentic router it follows and
+// leader; if the port is held by a healthy gremlord router it follows and
 // watches, racing to re-bind whenever the leader disappears.
 func (m *Manager) Run(ctx context.Context) error {
 	for {
@@ -56,11 +58,11 @@ func (m *Manager) Run(ctx context.Context) error {
 			return nil
 		case errors.Is(err, syscall.EADDRINUSE):
 			if !m.healthy(ctx) {
-				// Port held by a non-agentic process, or a wedged leader.
+				// Port held by a foreign process, or a wedged leader.
 				m.Log.Warn("router port busy but not healthy; retrying", "port", m.Port)
 			}
 		default:
-			return fmt.Errorf("router: cannot bind 127.0.0.1:%d: %w (set router.port in ~/.agentic/config.yaml)", m.Port, err)
+			return fmt.Errorf("router: cannot bind 127.0.0.1:%d: %w (set router.port in ~/.gremlord/config.yaml)", m.Port, err)
 		}
 		select {
 		case <-ctx.Done():
@@ -94,16 +96,24 @@ func (m *Manager) tryBind() (net.Listener, error) {
 func (m *Manager) healthy(ctx context.Context) bool {
 	reqCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, m.BaseURL()+"/agentic/health", nil)
-	if err != nil {
-		return false
+	// Probe both spellings: the port may be held by a pre-rename agentic
+	// router, which serves only the legacy path. Reading a healthy peer as a
+	// foreign process would make this instance refuse to start.
+	for _, path := range []string{wire.PathHealth, wire.LegacyPathHealth} {
+		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, m.BaseURL()+path, nil)
+		if err != nil {
+			continue
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			continue
+		}
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			return true
+		}
 	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
+	return false
 }
 
 func (m *Manager) lead(ctx context.Context, ln net.Listener) error {
@@ -115,7 +125,7 @@ func (m *Manager) lead(ctx context.Context, ln net.Listener) error {
 		ln.Close()
 		return err
 	}
-	st, err := store.Open(filepath.Join(m.DataDir, "agentic.db"))
+	st, err := store.Open(filepath.Join(m.DataDir, config.DBName))
 	if err != nil {
 		ln.Close()
 		return err
@@ -125,7 +135,7 @@ func (m *Manager) lead(ctx context.Context, ln net.Listener) error {
 	srv := NewServer(cfg, m.Token, m.DataDir, st, m.Log)
 	httpSrv := &http.Server{Handler: srv.Handler()}
 
-	// Hot-reload on direct edits to ~/.agentic/config.yaml.
+	// Hot-reload on direct edits to ~/.gremlord/config.yaml.
 	go watchConfig(ctx, srv, m.Log)
 
 	m.writeDiscovery()

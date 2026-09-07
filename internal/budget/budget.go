@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/store"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/store"
 )
 
 // Gate holds in-memory spend counters (rebuilt from SQLite on start and on
@@ -80,7 +80,7 @@ func (g *Gate) Check(profile string) string {
 				continue
 			}
 			if win.spent >= win.cap && hardStop(s.budget) {
-				return fmt.Sprintf("[agentic] %s budget exceeded ($%.2f of $%.2f for %s). Raise it in ~/.agentic/config.yaml or run: agentic cost",
+				return fmt.Sprintf("[gremlord] %s budget exceeded ($%.2f of $%.2f for %s). Raise it in ~/.gremlord/config.yaml or run: gremlord cost",
 					win.name, win.spent, win.cap, s.label)
 			}
 			warnAt := s.budget.WarnAt

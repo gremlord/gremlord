@@ -12,7 +12,7 @@
 # endpoints need push access on the repo.
 set -euo pipefail
 
-REPO="MaorBril/agentic"
+REPO="gremlord/gremlord"
 DRY_RUN=0
 while [ $# -gt 0 ]; do
     case "$1" in

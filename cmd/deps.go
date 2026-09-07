@@ -18,7 +18,7 @@ func ensureClaude() bool {
 }
 
 // ensureClauder checks for the clauder binary and, if missing, offers to
-// install it. clauder is optional — agentic works without it, and since
+// install it. clauder is optional — gremlord works without it, and since
 // Claude Code gained native cross-instance messaging it is wanted only for
 // persistent memory.
 func ensureClauder() bool {

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/maorbril/agentic/internal/anthropic"
-	"github.com/maorbril/agentic/internal/openai"
+	"github.com/gremlord/gremlord/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/openai"
 )
 
 // TranslateResponse maps a non-streaming ChatResponse back to the
@@ -20,7 +20,7 @@ func TranslateResponse(resp *openai.ChatResponse, alias string) (*anthropic.Mess
 		Model: alias,
 	}
 	if out.ID == "msg_" {
-		out.ID = "msg_agentic"
+		out.ID = "msg_gremlord"
 	}
 	if len(resp.Choices) == 0 {
 		return nil, fmt.Errorf("upstream returned no choices")
@@ -59,7 +59,7 @@ func reasoningText(deepseek, openrouter string) string {
 
 func toolUseID(id string) string {
 	if id == "" {
-		return "toolu_agentic_missing"
+		return "toolu_gremlord_missing"
 	}
 	return sanitizeToolUseID(id)
 }

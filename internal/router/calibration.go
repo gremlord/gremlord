@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maorbril/agentic/internal/store"
-	"github.com/maorbril/agentic/internal/tokens"
+	"github.com/gremlord/gremlord/internal/store"
+	"github.com/gremlord/gremlord/internal/tokens"
 )
 
 const (

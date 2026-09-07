@@ -2,9 +2,9 @@
 """Pinned bridge to SWE-bench's official v4.1.0 evaluation harness.
 
 This process owns no benchmark semantics of its own: it validates the
-installed swebench package matches the version agentic was built against,
+installed swebench package matches the version gremlord was built against,
 then delegates to the official APIs for everything that matters (dataset
-loading, test spec / image derivation, and grading). agentic's Go code only
+loading, test spec / image derivation, and grading). gremlord's Go code only
 ever sees the JSON this bridge prints on stdout.
 
 Four operations, selected by --op:

@@ -20,6 +20,9 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/wire"
 )
 
 // ClaudeCodeContainerVersion pins the official Linux x64 Claude Code native
@@ -108,7 +111,14 @@ func containerEnvArgs(e DockerContainerEnv) []string {
 		"USER=nonroot",
 		"ANTHROPIC_BASE_URL=" + e.BaseURL,
 		"ANTHROPIC_AUTH_TOKEN=" + e.Token,
-		"ANTHROPIC_CUSTOM_HEADERS=X-Agentic-Session: " + e.SessionID + "\nX-Agentic-Profile: " + e.Profile + "\nX-Agentic-Pin-Model: " + e.Model,
+		"ANTHROPIC_CUSTOM_HEADERS=" + wire.HeaderSession + ": " + e.SessionID +
+			"\n" + wire.HeaderProfile + ": " + e.Profile +
+			"\n" + wire.HeaderPinModel + ": " + e.Model +
+			"\n" + wire.LegacyHeaderSession + ": " + e.SessionID +
+			"\n" + wire.LegacyHeaderProfile + ": " + e.Profile +
+			"\n" + wire.LegacyHeaderPinModel + ": " + e.Model,
+		config.EnvName("SESSION_ID") + "=" + e.SessionID,
+		config.EnvName("PROFILE") + "=" + e.Profile,
 		"AGENTIC_SESSION_ID=" + e.SessionID,
 		"AGENTIC_PROFILE=" + e.Profile,
 		// Pin all tier fallbacks to the candidate model so subagent spawns don't escape
@@ -513,11 +523,11 @@ func (r *Runner) runSWEBenchCandidate(ctx context.Context, manifest *Manifest, t
 	}
 	gradeStart := time.Now()
 	grade, err := RunSWEBench(ctx, r.Options.SWEBench, []SWEBenchPrediction{{
-		InstanceID: task.ID, ModelNameOrPath: fmt.Sprintf("agentic/%s/%s", label, model), ModelPatch: res.Patch,
+		InstanceID: task.ID, ModelNameOrPath: fmt.Sprintf("gremlord/%s/%s", label, model), ModelPatch: res.Patch,
 	}}, SWEBenchOptions{
 		Dataset: manifest.Dataset.Source, Split: datasetSplit(manifest),
-		RunID:     fmt.Sprintf("agentic-%d-%s-%03d-%s", r.Options.Seed, task.ID, attempt, label),
-		ModelName: fmt.Sprintf("agentic/%s/%s", label, model), InstanceIDs: []string{task.ID},
+		RunID:     fmt.Sprintf("gremlord-%d-%s-%03d-%s", r.Options.Seed, task.ID, attempt, label),
+		ModelName: fmt.Sprintf("gremlord/%s/%s", label, model), InstanceIDs: []string{task.ID},
 		// Keep the official instance image between the two paired arms. With
 		// clean=true the first arm's grader removes it, making the second arm
 		// attempt an impossible registry pull for a locally-built image.

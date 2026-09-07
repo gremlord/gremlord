@@ -3,7 +3,7 @@ package pricing
 import (
 	"testing"
 
-	"github.com/maorbril/agentic/internal/config"
+	"github.com/gremlord/gremlord/internal/config"
 )
 
 func TestEmbeddedPrices(t *testing.T) {

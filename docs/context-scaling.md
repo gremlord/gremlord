@@ -11,7 +11,7 @@ So the router lies to it — proportionally.
 
 ## How it works
 
-Every model can declare its real context size in `~/.agentic/config.yaml`:
+Every model can declare its real context size in `~/.gremlord/config.yaml`:
 
 ```yaml
 models:
@@ -138,7 +138,7 @@ Both behaviors are observable: the router logs `autoroute_size` (Debug) with
 the estimate, required tokens, excluded tiers, and the remap; `route_decisions`
 gains a `reason` column (`size:light→standard`, `size:sticky:light→standard`,
 `task:implementation`, or `task:sql_data:size-ineligible`) visible via the
-statusline and `agentic context`.
+statusline and `gremlord context`.
 
 **Request-body byte cap.** Separate from the token budget: some upstreams cap
 the raw request body size (e.g. an nginx `client_max_body_size`), and a body can
@@ -155,7 +155,7 @@ exceeds is filtered out before routing (so an image-heavy turn routes away from
 the capped provider), and a pre-dispatch guard refuses a body over the resolved
 provider's cap with a `400 invalid_request_error` ("request body too large … run
 /compact or remove images/attachments") instead of a mangled upstream 413 retry
-loop. Unknown cap (`0`) means no guard. `agentic providers add --max-request-bytes`
+loop. Unknown cap (`0`) means no guard. `gremlord providers add --max-request-bytes`
 sets it.
 
 ## Calibrating the estimator
@@ -187,7 +187,7 @@ Guards, because this feeds itself:
   should not outvote the large ones, and it is the large requests whose
   fit against a budget actually matters.
 
-`agentic context` prints the measured accuracy per model. A ratio of 0.80
+`gremlord context` prints the measured accuracy per model. A ratio of 0.80
 means the estimator over-counts by 25% and a fifth of every budget check
 was going to a number that was never there.
 
@@ -195,7 +195,7 @@ was going to a number that was never there.
 
 The same per-request record splits the estimate three ways — system
 prompt, tool schemas, conversation — because the first two are re-sent in
-full on every request whatever the turn is about. `agentic context` shows
+full on every request whatever the turn is about. `gremlord context` shows
 the average split and the fixed share; a session where tool schemas are
 40% of every request is one where trimming MCP servers buys more than any
 amount of routing cleverness.
@@ -251,7 +251,7 @@ Precedence runs most-immediate-first: `ENABLE_TOOL_SEARCH` in the
 launching shell (`false` for eager, `auto:N` to sample), then the
 profile's `tool_search`, then on.
 
-`agentic eval` pins the variable to `false` rather than inheriting it.
+`gremlord eval` pins the variable to `false` rather than inheriting it.
 Interactive sessions export `ENABLE_TOOL_SEARCH=true` and every command
 they run inherits it, so an eval launched from inside a session would
 defer while the same command from a plain terminal would not — and
@@ -260,7 +260,7 @@ on where it was invoked from. Flipping that is a deliberate re-baseline.
 
 ## Watching the prefix cache
 
-Prompt caching decides most of the input bill, so `agentic cost` reports
+Prompt caching decides most of the input bill, so `gremlord cost` reports
 the share of each model's input tokens that upstream served from cache.
 Translated backends get no `cache_control` breakpoints — that is an
 Anthropic-API concept — but provider-side implicit caching is prefix-based
@@ -286,7 +286,7 @@ Three layers, from cheap to real:
    go test ./internal/router/ -run TestContextScalingEval -v
    ```
 
-3. **Live sessions** (`agentic context [session-id]`): per-request
+3. **Live sessions** (`gremlord context [session-id]`): per-request
    trajectory of true tokens vs reported tokens vs budget, with compaction
    points marked. This is the research surface.
 
@@ -296,7 +296,7 @@ The nominal window is in the model card; the *effective* window is an
 empirical property you measure. Suggested loop:
 
 1. Start with `context_window` only (nominal). Run real sessions.
-2. Watch `agentic context` and the router log's `ctx_pct` field. Correlate
+2. Watch `gremlord context` and the router log's `ctx_pct` field. Correlate
    quality failures — wrong edits, forgotten instructions, tool-call
    flailing, upstream `4xx` at high fullness — with the fullness percentage
    at which they happened. The `err_type` column in the trajectory makes
@@ -311,7 +311,7 @@ empirical property you measure. Suggested loop:
    a starting point per model family, but local quantized builds often
    underperform their upstream numbers, so verify locally.)
 
-Queries against `~/.agentic/agentic.db` for aggregate research:
+Queries against `~/.gremlord/agentic.db` for aggregate research:
 
 ```sql
 -- error rate by context fullness decile, per model
@@ -342,7 +342,7 @@ GROUP BY model, decile ORDER BY model, decile;
   ```
 
   Avoid ids Claude Code treats as 1M (`[1m]` variants). Unknown aliases
-  still get correct *reporting* (gauge, statusline, `agentic context`) —
+  still get correct *reporting* (gauge, statusline, `gremlord context`) —
   they just won't trigger the client's compaction machinery.
 - **Leave real headroom under the trigger.** The observed trigger is the
   full assumed window (~200K reported), not the ~92% warning line — so at

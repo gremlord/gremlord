@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/maorbril/agentic/internal/agents"
+	"github.com/gremlord/gremlord/internal/agents"
 )
 
 var agentsCmd = &cobra.Command{
@@ -16,11 +16,11 @@ var agentsCmd = &cobra.Command{
 	Long: `Claude Code's built-in Agent tool only accepts a fixed model parameter
 (sonnet | opus | haiku | fable), so a routed alias like "qwen" can't be
 selected through it. A subagent definition's model frontmatter has no such
-limit, so agentic generates one subagent per configured model alias —
-making every model selectable by name (subagent_type: "agentic-qwen").
+limit, so gremlord generates one subagent per configured model alias —
+making every model selectable by name (subagent_type: "gremlord-qwen").
 
-Definitions live in ~/.claude/agents/agentic-<alias>.md. Only files with the
-"agentic-" prefix are ever written or removed; your own agents are untouched.`,
+Definitions live in ~/.claude/agents/gremlord-<alias>.md. Only files with the
+"gremlord-" prefix are ever written or removed; your own agents are untouched.`,
 }
 
 var agentsListCmd = &cobra.Command{
@@ -37,7 +37,7 @@ var agentsListCmd = &cobra.Command{
 		}
 		want := agents.Desired(cfg)
 		if len(want) == 0 {
-			fmt.Println("no model aliases configured — add one with `agentic models add`")
+			fmt.Println("no model aliases configured — add one with `gremlord models add`")
 			return nil
 		}
 		changes, err := agents.Diff(cfg, dir)
@@ -66,7 +66,7 @@ var agentsListCmd = &cobra.Command{
 		tw.Flush()
 		fmt.Printf("\n%s\n", dir)
 		if len(changes) > 0 {
-			fmt.Println("run `agentic agents sync` to apply")
+			fmt.Println("run `gremlord agents sync` to apply")
 		}
 		return nil
 	},

@@ -8,13 +8,18 @@ import (
 )
 
 const (
-	guidanceStart = "<!-- agentic:peers:start -->"
-	guidanceEnd   = "<!-- agentic:peers:end -->"
+	guidanceStart = "<!-- gremlord:peers:start -->"
+	guidanceEnd   = "<!-- gremlord:peers:end -->"
+
+	// Pre-rename markers. Found and replaced in place, so the rename does not
+	// strand an orphaned block that duplicates the guidance.
+	legacyStart = "<!-- agentic:peers:start -->"
+	legacyEnd   = "<!-- agentic:peers:end -->"
 )
 
 // Guidance tells a session how to turn an approximate name into a specific
 // peer. It lands in ~/.claude/CLAUDE.md so plain `claude` sessions get it too,
-// not just agentic-launched ones.
+// not just gremlord-launched ones.
 const Guidance = `## Talking to other Claude sessions
 
 When asked to work with another session by an approximate name — "work with
@@ -23,7 +28,7 @@ rather than asking which session was meant. Session names are auto-derived from
 whatever that session is doing, so the name a user says is usually the project
 directory, and ListAgents does not show directories.
 
-1. Run ` + "`agentic peers <approximate name>`" + ` — it matches on both session name and
+1. Run ` + "`gremlord peers <approximate name>`" + ` — it matches on both session name and
    working directory, and lists only sessions that can actually receive a
    message.
 2. Call ListAgents to get the ` + "`[ref]`" + ` for the name it returned.
@@ -62,19 +67,28 @@ func InstallGuidance(path string) (Action, error) {
 	}
 
 	text := string(existing)
-	start := strings.Index(text, guidanceStart)
+	startMarker, endMarker := guidanceStart, guidanceEnd
+	start := strings.Index(text, startMarker)
 	if start < 0 {
-		if strings.Contains(text, guidanceEnd) {
-			return Unchanged, fmt.Errorf("%s has a stray %s marker — remove it and re-run", path, guidanceEnd)
+		// Fall back to the pre-rename markers so an agentic-era block is
+		// rewritten where it stands instead of being left behind alongside a
+		// second, near-identical block.
+		if i := strings.Index(text, legacyStart); i >= 0 {
+			startMarker, endMarker, start = legacyStart, legacyEnd, i
+		}
+	}
+	if start < 0 {
+		if strings.Contains(text, endMarker) {
+			return Unchanged, fmt.Errorf("%s has a stray %s marker — remove it and re-run", path, endMarker)
 		}
 		return Updated, os.WriteFile(path, []byte(strings.TrimRight(text, "\n")+"\n\n"+block+"\n"), 0o644)
 	}
 
-	end := strings.Index(text[start:], guidanceEnd)
+	end := strings.Index(text[start:], endMarker)
 	if end < 0 {
-		return Unchanged, fmt.Errorf("%s has an unterminated agentic block — restore its %s marker and re-run", path, guidanceEnd)
+		return Unchanged, fmt.Errorf("%s has an unterminated gremlord block — restore its %s marker and re-run", path, endMarker)
 	}
-	end += start + len(guidanceEnd)
+	end += start + len(endMarker)
 
 	if text[start:end] == block {
 		return Unchanged, nil

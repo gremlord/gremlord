@@ -1,6 +1,6 @@
 // Package clibe delegates a whole task to a locally installed coding-agent
 // CLI (Codex, Grok Build) running under the user's own subscription login.
-// agentic never sees the CLI's credentials — the binary authenticates itself
+// gremlord never sees the CLI's credentials — the binary authenticates itself
 // from its own cached login (`codex login` / `grok login`). The delegated CLI
 // runs its own independent agent loop with filesystem access in the calling
 // session's working directory, so a request here is minutes of autonomous
@@ -25,10 +25,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/maorbril/agentic/internal/anthropic"
-	"github.com/maorbril/agentic/internal/backend"
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/tokens"
+	"github.com/gremlord/gremlord/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/backend"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/tokens"
+
+	"github.com/gremlord/gremlord/internal/wire"
 )
 
 // CwdHeader carries the launching session's working directory on every
@@ -38,7 +40,7 @@ import (
 // same local trusted launch process and every request is gated by the
 // per-install token, so this is not a cross-trust boundary; the backend still
 // validates it (absolute, existing directory) as defense against bugs.
-const CwdHeader = "X-Agentic-Cwd"
+const CwdHeader = wire.HeaderCwd
 
 const (
 	defaultTimeout   = 20 * time.Minute
@@ -97,9 +99,9 @@ func New() *Backend {
 func (b *Backend) Messages(ctx context.Context, call *backend.Call, w http.ResponseWriter) backend.Result {
 	prov := call.Route.Provider
 
-	cwd := call.Header.Get(CwdHeader)
+	cwd := wire.Cwd(call.Header)
 	if cwd == "" || !filepath.IsAbs(cwd) {
-		return refuse(w, "cli delegation needs the session working directory (launch via `agentic` so "+CwdHeader+" is set)")
+		return refuse(w, "cli delegation needs the session working directory (launch via `gremlord` so "+CwdHeader+" is set)")
 	}
 	if st, err := os.Stat(cwd); err != nil || !st.IsDir() {
 		return refuse(w, fmt.Sprintf("cli delegation working directory %q is not an existing directory", cwd))
@@ -141,7 +143,7 @@ func (b *Backend) Messages(ctx context.Context, call *backend.Call, w http.Respo
 		if err := sse.Event("message_start", map[string]any{
 			"type": "message_start",
 			"message": anthropic.MessagesResponse{
-				ID: "msg_agentic_cli", Type: "message", Role: "assistant",
+				ID: "msg_gremlord_cli", Type: "message", Role: "assistant",
 				Model: call.Route.Alias, Content: []anthropic.ContentBlock{},
 				Usage: anthropic.Usage{InputTokens: estIn},
 			},
@@ -199,23 +201,23 @@ wait:
 	res := backend.Result{Status: 200}
 	switch {
 	case timedOut || errors.Is(runErr, context.DeadlineExceeded):
-		text = fmt.Sprintf("agentic: %s delegation timed out after %s; partial changes may exist in %s", prov.Dialect, timeout, cwd)
+		text = fmt.Sprintf("gremlord: %s delegation timed out after %s; partial changes may exist in %s", prov.Dialect, timeout, cwd)
 		res.ErrType, res.ErrMsg = "api_error", "delegation timeout"
 	case runErr != nil:
 		msg := runErr.Error()
 		if tail := stderr.String(); tail != "" {
 			msg += ": " + tail
 		}
-		text = fmt.Sprintf("agentic: %s delegation failed (%s)", prov.Dialect, msg)
+		text = fmt.Sprintf("gremlord: %s delegation failed (%s)", prov.Dialect, msg)
 		res.ErrType, res.ErrMsg = "api_error", truncate(msg, 512)
 	case text == "":
-		text = fmt.Sprintf("agentic: %s delegation produced no output", prov.Dialect)
+		text = fmt.Sprintf("gremlord: %s delegation produced no output", prov.Dialect)
 		res.ErrType, res.ErrMsg = "api_error", "empty delegation output"
 	}
 	if stdout.truncated {
-		text += "\n\nagentic: stdout truncated at 1MiB"
+		text += "\n\ngremlord: stdout truncated at 1MiB"
 	}
-	// Heuristic usage so the delegation shows up in `agentic cost` as a $0
+	// Heuristic usage so the delegation shows up in `gremlord cost` as a $0
 	// unpriced row (validation forbids pricing on cli models).
 	res.Usage = anthropic.Usage{InputTokens: estIn, OutputTokens: estimateTokens(text)}
 	res.ReportedInput = estIn
@@ -240,7 +242,7 @@ wait:
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(anthropic.MessagesResponse{
-		ID: "msg_agentic_cli", Type: "message", Role: "assistant",
+		ID: "msg_gremlord_cli", Type: "message", Role: "assistant",
 		Model:      call.Route.Alias,
 		Content:    []anthropic.ContentBlock{{Type: "text", Text: text}},
 		StopReason: "end_turn",
@@ -254,7 +256,7 @@ wait:
 func (b *Backend) CountTokens(ctx context.Context, call *backend.Call, w http.ResponseWriter) backend.Result {
 	req, err := anthropic.ParseRequest(call.Raw)
 	if err != nil {
-		anthropic.WriteError(w, 400, "invalid_request_error", "agentic: "+err.Error())
+		anthropic.WriteError(w, 400, "invalid_request_error", "gremlord: "+err.Error())
 		return backend.Result{Status: 400, ErrType: "invalid_request_error"}
 	}
 	n := tokens.ScaleCount(call.EstimateInput(req), tokens.ScaleFactor(call.ScaleBudget()))
@@ -268,7 +270,7 @@ func (b *Backend) CountTokens(ctx context.Context, call *backend.Call, w http.Re
 // surfaces 400s verbatim instead of retry-spinning, and retrying a
 // side-effectful agent run is worse than retrying a completion.
 func refuse(w http.ResponseWriter, msg string) backend.Result {
-	full := "agentic: " + msg
+	full := "gremlord: " + msg
 	anthropic.WriteError(w, 400, "invalid_request_error", full)
 	return backend.Result{Status: 400, ErrType: "invalid_request_error", ErrMsg: truncate(msg, 512)}
 }
@@ -280,7 +282,7 @@ func (b *Backend) environ() []string {
 	return os.Environ()
 }
 
-// sanitizeEnv drops agentic/router credentials and unrelated provider keys
+// sanitizeEnv drops gremlord/router credentials and unrelated provider keys
 // from the delegated process. The peer CLI authenticates itself from its own
 // login; it does not need the launcher's secrets.
 func sanitizeEnv(env []string) []string {
@@ -292,6 +294,8 @@ func sanitizeEnv(env []string) []string {
 		"ANTHROPIC_MODEL":            true,
 		"ANTHROPIC_SMALL_FAST_MODEL": true,
 		"CLAUDE_CODE_SUBAGENT_MODEL": true,
+		"GREMLORD_SESSION_ID":        true,
+		"GREMLORD_PROFILE":           true,
 		"AGENTIC_SESSION_ID":         true,
 		"AGENTIC_PROFILE":            true,
 		"OPENAI_API_KEY":             true,

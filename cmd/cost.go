@@ -9,7 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/maorbril/agentic/internal/store"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/store"
 )
 
 var (
@@ -28,7 +29,7 @@ var costCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		st, err := store.OpenReadOnly(filepath.Join(dataDir, "agentic.db"))
+		st, err := store.OpenReadOnly(filepath.Join(dataDir, config.DBName))
 		if err != nil {
 			return fmt.Errorf("no usage recorded yet (%v)", err)
 		}

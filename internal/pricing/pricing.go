@@ -7,14 +7,14 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/maorbril/agentic/internal/config"
+	"github.com/gremlord/gremlord/internal/config"
 )
 
 //go:embed prices.json
 var embedded []byte
 
 // Table maps upstream model ID -> price. Merge order (later wins):
-// embedded -> ~/.agentic/prices.json -> config `pricing:` -> per-model override.
+// embedded -> ~/.gremlord/prices.json -> config `pricing:` -> per-model override.
 type Table struct {
 	prices map[string]config.Price
 }

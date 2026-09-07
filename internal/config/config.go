@@ -1,4 +1,4 @@
-// Package config loads and validates ~/.agentic/config.yaml.
+// Package config loads and validates ~/.gremlord/config.yaml.
 package config
 
 import (
@@ -15,7 +15,7 @@ const (
 	ProviderOpenAI    = "openai"
 	// ProviderCLI delegates to a locally installed coding-agent CLI (Codex,
 	// Grok Build) running under the user's own subscription login, instead of
-	// an HTTP endpoint. agentic never touches the CLI's credentials — the
+	// an HTTP endpoint. gremlord never touches the CLI's credentials — the
 	// binary authenticates itself from its own cached login.
 	ProviderCLI = "cli"
 
@@ -146,7 +146,7 @@ func (p Provider) Bin() string {
 }
 
 // Key resolves the provider's API key: config literal, then process
-// environment, then ~/.agentic/env (so keys don't depend on which shell
+// environment, then ~/.gremlord/env (so keys don't depend on which shell
 // launched the router leader). Empty is valid for unauthenticated local
 // endpoints.
 func (p Provider) Key() string {
@@ -247,13 +247,23 @@ type Price struct {
 	CacheWrite float64 `yaml:"cache_write" json:"cache_write"`
 }
 
-// DataDir returns ~/.agentic, creating it if needed.
+// DataDir returns ~/.gremlord, creating it if needed. On the first run after
+// the gremlord rename it carries the old directory's contents across.
 func DataDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(home, ".agentic")
+	dir := filepath.Join(home, DirName)
+
+	// A failed migration must not make the tool unusable. Warn and continue
+	// with an empty directory; ~/.agentic is untouched, so a retry is possible.
+	if migrated, err := migrateLegacy(home, dir); err != nil {
+		fmt.Fprintf(os.Stderr, "gremlord: could not carry ~/%s forward: %v\n", LegacyDirName, err)
+	} else if migrated {
+		fmt.Fprintf(os.Stderr, "gremlord: carried your config and cost history over from ~/%s (originals untouched; `gremlord doctor` lists what was not copied)\n", LegacyDirName)
+	}
+
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
@@ -269,13 +279,13 @@ func Path() (string, error) {
 }
 
 // Load reads and validates the config file. A missing file returns
-// os.ErrNotExist so callers can suggest `agentic setup`.
+// os.ErrNotExist so callers can suggest `gremlord setup`.
 func Load() (*Config, error) {
 	path, err := Path()
 	if err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(readPath(path))
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +384,7 @@ func (c *Config) Validate() error {
 	for name, prof := range c.Profiles {
 		for what, alias := range map[string]string{"model": prof.Model, "small_fast": prof.SmallFast} {
 			if alias != "" && c.IsCLIAlias(alias) {
-				return fmt.Errorf("config: profile %q %s references cli alias %q — cli delegation is only available as an explicit subagent (agentic agents sync), not a session model", name, what, alias)
+				return fmt.Errorf("config: profile %q %s references cli alias %q — cli delegation is only available as an explicit subagent (gremlord agents sync), not a session model", name, what, alias)
 			}
 		}
 		for tier, alias := range prof.Tiers {

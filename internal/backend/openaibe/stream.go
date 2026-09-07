@@ -9,9 +9,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/maorbril/agentic/internal/anthropic"
-	"github.com/maorbril/agentic/internal/openai"
-	"github.com/maorbril/agentic/internal/tokens"
+	"github.com/gremlord/gremlord/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/openai"
+	"github.com/gremlord/gremlord/internal/tokens"
 )
 
 // streamState turns an OpenAI chunk stream into the exact Anthropic SSE
@@ -141,7 +141,7 @@ func (s *streamState) Run(ctx context.Context, body io.Reader) (anthropic.Usage,
 // the message is opened with a synthetic id (handleChunk won't re-open it).
 func (s *streamState) ping() {
 	if !s.started {
-		s.startMessage("msg_agentic_pending")
+		s.startMessage("msg_gremlord_pending")
 		return // startMessage already pings
 	}
 	s.sse.Ping()
@@ -257,7 +257,7 @@ func (s *streamState) currentToolID() string {
 func (s *streamState) openToolBlock() {
 	id := s.pendingID
 	if id == "" {
-		id = "toolu_agentic_missing"
+		id = "toolu_gremlord_missing"
 	} else {
 		id = sanitizeToolUseID(id)
 	}

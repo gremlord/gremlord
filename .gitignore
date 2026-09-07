@@ -1,8 +1,9 @@
+/gremlord
 /agentic
 *.log
 .env
 .env.*
-.agentic/evals/
+.gremlord/evals/
 .DS_Store
 .claude/
 logs/

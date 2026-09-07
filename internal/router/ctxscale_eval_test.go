@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maorbril/agentic/internal/anthropic"
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/store"
-	"github.com/maorbril/agentic/internal/tokens"
+	"github.com/gremlord/gremlord/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/store"
+	"github.com/gremlord/gremlord/internal/tokens"
 )
 
 // compactAt is the simulated auto-compact trigger, as a fraction of the

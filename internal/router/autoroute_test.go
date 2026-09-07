@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/maorbril/agentic/internal/config"
+	"github.com/gremlord/gremlord/internal/config"
 )
 
 func testRule() config.RouteRule {
