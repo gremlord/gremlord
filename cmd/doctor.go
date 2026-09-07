@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -73,6 +74,16 @@ var doctorCmd = &cobra.Command{
 		}
 
 		ensureClauder()
+
+		if dir, notCarried := config.LegacyLeftBehind(); dir != "" {
+			fmt.Printf("· %s is still on disk; gremlord reads %s now and left the original alone\n",
+				dir, dataDir)
+			if len(notCarried) > 0 {
+				fmt.Printf("  not carried over: %s\n", strings.Join(notCarried, ", "))
+				fmt.Println("  evals/ and swebench-venv/ embed absolute paths, so recreate the venv" +
+					" if you run SWE-bench; the logs regenerate. Delete the old directory when you are done with it.")
+			}
+		}
 
 		home, _ := os.UserHomeDir()
 		if data, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json")); err == nil {

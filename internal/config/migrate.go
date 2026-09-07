@@ -142,3 +142,24 @@ func readPath(path string) string {
 	}
 	return path
 }
+
+// LegacyLeftBehind describes an agentic directory still on disk and what the
+// migration deliberately did not carry across. Empty when there is nothing to
+// say. The first-run notice points users at `gremlord doctor` for this, so the
+// two have to stay in step.
+func LegacyLeftBehind() (dir string, notCarried []string) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", nil
+	}
+	dir = filepath.Join(home, LegacyDirName)
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return "", nil
+	}
+	for _, name := range []string{"evals", "swebench-venv", "router.log", "router.json"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			notCarried = append(notCarried, name)
+		}
+	}
+	return dir, notCarried
+}
