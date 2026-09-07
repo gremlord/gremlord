@@ -3,7 +3,7 @@ package tokens
 import (
 	"math"
 
-	"github.com/maorbril/agentic/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/anthropic"
 )
 
 // AssumedWindow is the context window Claude Code believes it has. Claude

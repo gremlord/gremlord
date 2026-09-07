@@ -1,4 +1,4 @@
-module github.com/maorbril/agentic
+module github.com/gremlord/gremlord
 
 go 1.26.3
 

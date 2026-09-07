@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/maorbril/agentic/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/anthropic"
 )
 
 func req(t *testing.T, body string) *anthropic.MessagesRequest {

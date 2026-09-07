@@ -10,8 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/store"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/store"
 	"gopkg.in/yaml.v3"
 )
 
@@ -92,7 +92,7 @@ var budgetShowCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		st, err := store.OpenReadOnly(filepath.Join(dataDir, "agentic.db"))
+		st, err := store.OpenReadOnly(filepath.Join(dataDir, config.DBName))
 		if err != nil {
 			return fmt.Errorf("no usage recorded yet (%v)", err)
 		}
@@ -135,7 +135,7 @@ var budgetShowCmd = &cobra.Command{
 		}
 
 		if cfg.Budgets == nil {
-			fmt.Println("No global budget set. Set one with: agentic budget set --daily 25 --monthly 400")
+			fmt.Println("No global budget set. Set one with: gremlord budget set --daily 25 --monthly 400")
 		} else {
 			printBudget("Global", cfg.Budgets, "")
 		}
@@ -152,8 +152,8 @@ var budgetShowCmd = &cobra.Command{
 var budgetSetCmd = &cobra.Command{
 	Use:   "set",
 	Short: "Set budget caps (global, or per profile with --profile)",
-	Example: `  agentic budget set --daily 25 --monthly 400
-  agentic budget set --profile cheap --daily 5`,
+	Example: `  gremlord budget set --daily 25 --monthly 400
+  gremlord budget set --profile cheap --daily 5`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		base := "budgets"
 		if budgetProfile != "" {

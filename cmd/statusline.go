@@ -9,13 +9,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/store"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/store"
 )
 
 // statuslineCmd is invoked by Claude Code (registered as its statusLine
 // command) with session JSON on stdin. It inherits the session's env, so
-// AGENTIC_SESSION_ID / AGENTIC_PROFILE identify the session.
+// GREMLORD_SESSION_ID / GREMLORD_PROFILE identify the session (the
+// pre-rename AGENTIC_* spellings are still accepted).
 var statuslineCmd = &cobra.Command{
 	Use:    "statusline",
 	Short:  "Claude Code statusLine hook (spend bar)",
@@ -28,8 +29,8 @@ var statuslineCmd = &cobra.Command{
 		}
 		json.NewDecoder(os.Stdin).Decode(&input)
 
-		profile := os.Getenv("AGENTIC_PROFILE")
-		sessionID := os.Getenv("AGENTIC_SESSION_ID")
+		profile := config.Getenv("PROFILE")
+		sessionID := config.Getenv("SESSION_ID")
 		if sessionID == "" {
 			fmt.Printf("%s · sub · no tracking\n", orDefault(input.Model.DisplayName, "claude"))
 			return nil
@@ -39,7 +40,7 @@ var statuslineCmd = &cobra.Command{
 		if err != nil {
 			return nil // never break the statusline
 		}
-		st, err := store.OpenReadOnly(filepath.Join(dataDir, "agentic.db"))
+		st, err := store.OpenReadOnly(filepath.Join(dataDir, config.DBName))
 		if err != nil {
 			return nil
 		}
@@ -68,7 +69,7 @@ var statuslineCmd = &cobra.Command{
 			goalReason = reason
 		}
 
-		fmt.Println(statusLine(orDefault(profile, "agentic"), modelPart, sess, day, cfg.Budgets, goalReason))
+		fmt.Println(statusLine(orDefault(profile, "gremlord"), modelPart, sess, day, cfg.Budgets, goalReason))
 		return nil
 	},
 }

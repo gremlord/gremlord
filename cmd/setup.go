@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/launch"
-	"github.com/maorbril/agentic/internal/peers"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/launch"
+	"github.com/gremlord/gremlord/internal/peers"
 )
 
 // registerStatusline merges a statusLine entry into ~/.claude/settings.json
@@ -32,15 +32,15 @@ func registerStatusline() error {
 		}
 	}
 	if existing, ok := settings["statusLine"]; ok {
-		if m, ok := existing.(map[string]any); ok && m["command"] == "agentic statusline" {
+		if m, ok := existing.(map[string]any); ok && m["command"] == "gremlord statusline" {
 			fmt.Println("✓ statusline already registered")
 			return nil
 		}
 		fmt.Println("· a statusline is already configured in ~/.claude/settings.json — leaving it alone")
-		fmt.Println(`  (to use agentic's: set "statusLine": {"type":"command","command":"agentic statusline"})`)
+		fmt.Println(`  (to use gremlord's: set "statusLine": {"type":"command","command":"gremlord statusline"})`)
 		return nil
 	}
-	settings["statusLine"] = map[string]any{"type": "command", "command": "agentic statusline"}
+	settings["statusLine"] = map[string]any{"type": "command", "command": "gremlord statusline"}
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err
@@ -48,12 +48,12 @@ func registerStatusline() error {
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return err
 	}
-	fmt.Println("✓ registered agentic statusline in ~/.claude/settings.json")
+	fmt.Println("✓ registered gremlord statusline in ~/.claude/settings.json")
 	return nil
 }
 
-// registerPeerGuidance teaches every session — agentic-launched or not — how
-// to resolve an approximate session name via `agentic peers`. It lives in
+// registerPeerGuidance teaches every session — gremlord-launched or not — how
+// to resolve an approximate session name via `gremlord peers`. It lives in
 // ~/.claude/CLAUDE.md between markers, so re-running setup refreshes the block
 // without touching anything else in the file.
 func registerPeerGuidance() error {
@@ -77,7 +77,7 @@ func registerPeerGuidance() error {
 	return nil
 }
 
-const defaultConfig = `# ~/.agentic/config.yaml — edit directly or via the agentic CLI.
+const defaultConfig = `# ~/.gremlord/config.yaml — edit directly or via the gremlord CLI.
 version: 1
 default_profile: main
 
@@ -159,7 +159,7 @@ var setupCmd = &cobra.Command{
 
 		envPath := filepath.Join(dataDir, "env")
 		if _, err := os.Stat(envPath); os.IsNotExist(err) {
-			template := "# agentic provider keys (0600). The router reads this file directly,\n" +
+			template := "# gremlord provider keys (0600). The router reads this file directly,\n" +
 				"# so keys work no matter which shell launches a session.\n" +
 				"# Process environment variables take precedence when set.\n" +
 				"ANTHROPIC_API_KEY=\n" +
@@ -172,7 +172,7 @@ var setupCmd = &cobra.Command{
 		anthCfg := config.Provider{APIKeyEnv: "ANTHROPIC_API_KEY"}
 		if anthCfg.Key() == "" {
 			fmt.Println("⚠ ANTHROPIC_API_KEY not found — the router bills via API keys, not your Claude subscription.")
-			fmt.Printf("  Put it in %s (or export it), or use `agentic -p subscription` for normal subscription claude.\n", envPath)
+			fmt.Printf("  Put it in %s (or export it), or use `gremlord -p subscription` for normal subscription claude.\n", envPath)
 		} else {
 			fmt.Println("✓ ANTHROPIC_API_KEY available")
 		}
@@ -190,7 +190,7 @@ var setupCmd = &cobra.Command{
 			fmt.Println("  (cross-instance messaging is native to Claude Code — nothing to configure)")
 		}
 
-		fmt.Println("\nDone. Start a session with: agentic")
+		fmt.Println("\nDone. Start a session with: gremlord")
 		return nil
 	},
 }

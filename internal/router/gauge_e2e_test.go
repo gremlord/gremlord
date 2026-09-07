@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/store"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/store"
 )
 
 // gaugeServer stands up a rule with a 1M "deep" tier and a 100K "light"

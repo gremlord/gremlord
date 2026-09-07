@@ -6,12 +6,12 @@ import (
 	"os"
 	"time"
 
-	"github.com/maorbril/agentic/internal/config"
+	"github.com/gremlord/gremlord/internal/config"
 )
 
 // watchConfig polls the config file's mtime and reloads the server when it
-// changes. This closes the gap for direct edits to ~/.agentic/config.yaml:
-// `agentic config set` already hot-reloads via POST /agentic/reload, but an
+// changes. This closes the gap for direct edits to ~/.gremlord/config.yaml:
+// `gremlord config set` already hot-reloads via the reload path, but an
 // editor save does not, so the running leader would serve a stale config
 // until restarted.
 //

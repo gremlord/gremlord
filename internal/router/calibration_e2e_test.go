@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/store"
-	"github.com/maorbril/agentic/internal/tokens"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/store"
+	"github.com/gremlord/gremlord/internal/tokens"
 )
 
 // calibServer serves one model with a deliberately tight window, over a

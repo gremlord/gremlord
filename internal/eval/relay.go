@@ -16,7 +16,7 @@ import (
 
 const containerRelayHost = "host.docker.internal"
 
-// Relay is a temporary authenticated reverse proxy to an agentic router.
+// Relay is a temporary authenticated reverse proxy to a gremlord router.
 // URL is suitable for processes on the host; ContainerURL addresses the same
 // listener from Docker Desktop containers.
 type Relay struct {

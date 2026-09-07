@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maorbril/agentic/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/anthropic"
 )
 
 // runStream feeds recorded OpenAI chunks through the state machine and

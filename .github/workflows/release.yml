@@ -38,14 +38,14 @@ jobs:
           EXT=""
           [ "$GOOS" = "windows" ] && EXT=".exe"
           go build -trimpath \
-            -ldflags "-s -w -X github.com/maorbril/agentic/internal/router.Version=$TAG" \
-            -o "agentic-$GOOS-$GOARCH$EXT" .
+            -ldflags "-s -w -X github.com/gremlord/gremlord/internal/router.Version=$TAG" \
+            -o "gremlord-$GOOS-$GOARCH$EXT" .
       - name: Upload asset
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ github.event.release.tag_name || github.event.inputs.tag }}"
-          gh release upload "$TAG" agentic-${{ matrix.goos }}-${{ matrix.goarch }}* --clobber
+          gh release upload "$TAG" gremlord-${{ matrix.goos }}-${{ matrix.goarch }}* --clobber
 
   test:
     runs-on: ubuntu-latest

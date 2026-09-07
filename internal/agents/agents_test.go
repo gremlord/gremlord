@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maorbril/agentic/internal/config"
+	"github.com/gremlord/gremlord/internal/config"
 )
 
 func testCfg(aliases ...string) *config.Config {
@@ -44,13 +44,13 @@ func TestDesiredEmitsAliasAsModel(t *testing.T) {
 		t.Fatalf("got %d definitions, want 1", len(got))
 	}
 	d := got[0]
-	if d.Name != "agentic-gpt-5-6-sol" || d.Filename != "agentic-gpt-5-6-sol.md" {
+	if d.Name != "gremlord-gpt-5-6-sol" || d.Filename != "gremlord-gpt-5-6-sol.md" {
 		t.Errorf("name=%q file=%q", d.Name, d.Filename)
 	}
 	if !strings.Contains(d.Body, "\nmodel: gpt-5.6-sol\n") {
 		t.Errorf("body must carry the raw alias in model frontmatter:\n%s", d.Body)
 	}
-	if !strings.Contains(d.Body, "name: agentic-gpt-5-6-sol") {
+	if !strings.Contains(d.Body, "name: gremlord-gpt-5-6-sol") {
 		t.Errorf("body must declare the slugged name:\n%s", d.Body)
 	}
 }
@@ -126,19 +126,19 @@ func TestDiffAndSyncRoundTrip(t *testing.T) {
 	// Dropping an alias makes its file stale.
 	smaller := testCfg("qwen")
 	changes, _ = Diff(smaller, dir)
-	if len(changes) != 1 || changes[0].Kind != "remove" || changes[0].Name != "agentic-opus" {
-		t.Fatalf("want remove of agentic-opus, got %+v", changes)
+	if len(changes) != 1 || changes[0].Kind != "remove" || changes[0].Name != "gremlord-opus" {
+		t.Fatalf("want remove of gremlord-opus, got %+v", changes)
 	}
 	if _, err := Sync(smaller, dir); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "agentic-opus.md")); !os.IsNotExist(err) {
-		t.Error("stale agentic-opus.md should have been removed")
+	if _, err := os.Stat(filepath.Join(dir, "gremlord-opus.md")); !os.IsNotExist(err) {
+		t.Error("stale gremlord-opus.md should have been removed")
 	}
 }
 
 // The safety property that matters most: a user's own agents are never read,
-// written, or deleted — only the agentic- prefix is owned.
+// written, or deleted — only the gremlord- prefix is owned.
 func TestSyncNeverTouchesForeignFiles(t *testing.T) {
 	dir := t.TempDir()
 	foreign := filepath.Join(dir, "my-reviewer.md")
@@ -165,7 +165,7 @@ func TestSyncNeverTouchesForeignFiles(t *testing.T) {
 	}
 }
 
-// A hand-edited agentic-* file is reported as an update so sync can restore
+// A hand-edited gremlord-* file is reported as an update so sync can restore
 // it — that file is ours by prefix.
 func TestDiffDetectsHandEditedOwnedFile(t *testing.T) {
 	dir := t.TempDir()
@@ -173,7 +173,7 @@ func TestDiffDetectsHandEditedOwnedFile(t *testing.T) {
 	if _, err := Sync(cfg, dir); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(dir, "agentic-qwen.md")
+	path := filepath.Join(dir, "gremlord-qwen.md")
 	if err := os.WriteFile(path, []byte("tampered\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -232,4 +232,42 @@ func mustDiff(t *testing.T, cfg *config.Config, dir string) []Change {
 		t.Fatal(err)
 	}
 	return c
+}
+
+// After the rename, the agentic-* files a previous version wrote are orphans:
+// they still show up in Claude Code's subagent picker but point at the old
+// binary's naming. Sync has to delete them, which means the scan has to see
+// them even though they no longer carry the current prefix.
+func TestSyncRemovesPreRenameFiles(t *testing.T) {
+	dir := t.TempDir()
+	cfg := testCfg("qwen")
+
+	stale := filepath.Join(dir, LegacyPrefix+"opus.md")
+	if err := os.WriteFile(stale, []byte("old definition\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	changes, err := Diff(cfg, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sawRemove bool
+	for _, c := range changes {
+		if c.Kind == "remove" && c.Name == LegacyPrefix+"opus" {
+			sawRemove = true
+		}
+	}
+	if !sawRemove {
+		t.Fatalf("want a remove for %sopus, got %+v", LegacyPrefix, changes)
+	}
+
+	if _, err := Sync(cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Errorf("%s should have been removed", stale)
+	}
+	if _, err := os.Stat(filepath.Join(dir, Prefix+"qwen.md")); err != nil {
+		t.Errorf("current-prefix file missing: %v", err)
+	}
 }

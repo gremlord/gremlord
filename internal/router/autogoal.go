@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/maorbril/agentic/internal/anthropic"
-	"github.com/maorbril/agentic/internal/config"
+	"github.com/gremlord/gremlord/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/config"
 )
 
 // goalRouter runs a second, independent classification pass over each new
@@ -114,7 +114,7 @@ func (s *Server) classifyGoalViaBackend(ctx context.Context, rule config.RouteRu
 // judged goal-worthy, naming the harness's own recognized mechanisms so the
 // model can act on it directly rather than being told to invent one.
 const goalReminderTemplate = `<system-reminder>
-agentic: this task looks well suited to a recurring goal loop rather than a
+gremlord: this task looks well suited to a recurring goal loop rather than a
 single reply (%s). If a persistent loop would help — checking back on
 progress, retrying until a condition holds, babysitting a long-running
 process — call ScheduleWakeup with prompt "<<autonomous-loop-dynamic>>" and a

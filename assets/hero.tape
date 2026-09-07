@@ -1,4 +1,4 @@
-# hero.gif — the 30-second agentic pitch: same claude, what it cost, on any model.
+# hero.gif — the 30-second gremlord pitch: same claude, what it cost, on any model.
 #
 # Record from the repo root against a throwaway HOME, so the demo shows a
 # synthetic usage log rather than the maintainer's real spend and providers.
@@ -27,11 +27,11 @@ Enter
 Show
 
 # 1. It is the claude you already know.
-Type "agentic"
+Type "gremlord"
 Enter
 Sleep 9s
 # Exit off-camera. Claude Code warns on stderr about any model name outside its
-# own catalog — which every agentic alias is, by design — and the warning only
+# own catalog — which every gremlord alias is, by design — and the warning only
 # becomes visible when the TUI tears down.
 Hide
 Type "/exit"
@@ -42,7 +42,7 @@ Enter
 Show
 
 # 2. ...that now tells you what today cost.
-Type "agentic cost --by model"
+Type "gremlord cost --by model"
 Enter
 Sleep 6s
 Hide
@@ -51,6 +51,6 @@ Enter
 Show
 
 # 3. ...on any model you point it at.
-Type "agentic models list"
+Type "gremlord models list"
 Enter
 Sleep 5s

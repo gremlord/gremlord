@@ -3,7 +3,7 @@ package backend
 import (
 	"testing"
 
-	"github.com/maorbril/agentic/internal/config"
+	"github.com/gremlord/gremlord/internal/config"
 )
 
 func TestScaleBudgetPrefersGauge(t *testing.T) {

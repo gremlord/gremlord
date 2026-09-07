@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maorbril/agentic/internal/store"
+	"github.com/gremlord/gremlord/internal/store"
 )
 
 func TestLoadManifestStrictAndValidates(t *testing.T) {

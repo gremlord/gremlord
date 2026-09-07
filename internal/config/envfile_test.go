@@ -9,7 +9,7 @@ import (
 func TestKeyResolutionOrder(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	dir := filepath.Join(home, ".agentic")
+	dir := filepath.Join(home, ".gremlord")
 	os.MkdirAll(dir, 0o700)
 	os.WriteFile(filepath.Join(dir, "env"), []byte(
 		"# comment\nTEST_AGENTIC_KEY=from-file\nQUOTED_KEY=\"quoted-value\"\n"), 0o600)

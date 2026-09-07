@@ -1,6 +1,6 @@
 package main
 
-import "github.com/maorbril/agentic/cmd"
+import "github.com/gremlord/gremlord/cmd"
 
 func main() {
 	cmd.Execute()

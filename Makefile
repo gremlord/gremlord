@@ -1,6 +1,6 @@
-BINARY := agentic
+BINARY := gremlord
 VERSION ?= dev
-LDFLAGS := -ldflags "-X github.com/maorbril/agentic/internal/router.Version=$(VERSION)"
+LDFLAGS := -ldflags "-X github.com/gremlord/gremlord/internal/router.Version=$(VERSION)"
 
 .PHONY: build test vet install clean
 

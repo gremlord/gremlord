@@ -3,7 +3,7 @@ package tokens
 import (
 	"testing"
 
-	"github.com/maorbril/agentic/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/anthropic"
 )
 
 func TestScaleFactor(t *testing.T) {

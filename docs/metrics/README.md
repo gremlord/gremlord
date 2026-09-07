@@ -17,4 +17,4 @@ double-counting it. Run it at least every 14 days or the gap is permanent.
 
 Two things these numbers are not. Clone counts include CI and scrapers, so they
 overstate humans. Release-asset downloads include the maintainer's own
-`agentic update` runs across every release, so early counts are mostly self-traffic.
+`gremlord update` runs across every release, so early counts are mostly self-traffic.

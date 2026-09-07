@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maorbril/agentic/internal/anthropic"
-	"github.com/maorbril/agentic/internal/config"
+	"github.com/gremlord/gremlord/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/config"
 )
 
 func newGoal(d goalDecision, err error) *goalRouter {

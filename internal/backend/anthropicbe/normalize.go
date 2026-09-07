@@ -217,7 +217,7 @@ func sanitizeToolIDs(m map[string]any) {
 
 func validToolID(id string) string {
 	if id == "" {
-		return "toolu_agentic_missing"
+		return "toolu_gremlord_missing"
 	}
 	clean := true
 	for _, r := range id {

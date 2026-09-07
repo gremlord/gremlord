@@ -5,10 +5,10 @@
 // model parameter (sonnet | opus | haiku | fable), so a routed alias like
 // "qwen" can never be selected through it. A subagent *definition's* model
 // frontmatter has no such restriction — and behind a custom
-// ANTHROPIC_BASE_URL (which agentic always sets) Claude Code passes the
+// ANTHROPIC_BASE_URL (which gremlord always sets) Claude Code passes the
 // string through unvalidated — so one generated definition per alias makes
 // every configured model selectable by name (subagent_type:
-// "agentic-qwen").
+// "gremlord-qwen").
 //
 // The alias list comes from the user's own config, so the generated set is
 // whatever that install has configured — nothing is hardcoded.
@@ -23,13 +23,18 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/maorbril/agentic/internal/config"
+	"github.com/gremlord/gremlord/internal/config"
 )
 
 // Prefix marks the files this package owns. Anything without it in
 // ~/.claude/agents is a user's own agent and is never read, written, or
 // deleted.
-const Prefix = "agentic-"
+const Prefix = "gremlord-"
+
+// LegacyPrefix is the pre-rename prefix. Still recognised on scan, so a
+// sync reports the old files as removals and cleans them up; without this
+// they fall outside every scan and stay selectable forever.
+const LegacyPrefix = "agentic-"
 
 // Definition is one generated subagent file.
 type Definition struct {
@@ -82,11 +87,11 @@ func definitionFor(cfg *config.Config, alias string) Definition {
 
 	body := fmt.Sprintf(`---
 name: %s
-description: Runs the task on the %q model alias%s, routed through agentic. Use when you specifically want this model — for cost, context size, or capability reasons — rather than the default sonnet/opus/haiku tiers.
+description: Runs the task on the %q model alias%s, routed through gremlord. Use when you specifically want this model — for cost, context size, or capability reasons — rather than the default sonnet/opus/haiku tiers.
 model: %s
 ---
 
-You are running on the %q model alias, routed through the local agentic
+You are running on the %q model alias, routed through the local gremlord
 router to %s.
 
 Complete the task you were given and report the result. Your final message
@@ -188,9 +193,10 @@ type Change struct {
 	Kind string // "create" | "update" | "remove"
 }
 
-// Diff compares the definitions cfg implies against the agentic-* files on
-// disk. Files without Prefix are ignored entirely. A "remove" is reported
-// for an agentic-* file whose alias is no longer configured.
+// Diff compares the definitions cfg implies against the files on disk this
+// package owns. Anything else is ignored entirely. A "remove" is reported
+// for an owned file whose alias is no longer configured, and for every
+// pre-rename agentic-* file.
 func Diff(cfg *config.Config, dir string) ([]Change, error) {
 	want := map[string]Definition{}
 	for _, d := range Desired(cfg) {
@@ -204,7 +210,7 @@ func Diff(cfg *config.Config, dir string) ([]Change, error) {
 	}
 	for _, e := range entries {
 		name := e.Name()
-		if e.IsDir() || !strings.HasPrefix(name, Prefix) || !strings.HasSuffix(name, ".md") {
+		if e.IsDir() || !owned(name) || !strings.HasSuffix(name, ".md") {
 			continue // not ours
 		}
 		data, err := os.ReadFile(filepath.Join(dir, name))
@@ -238,8 +244,8 @@ func Diff(cfg *config.Config, dir string) ([]Change, error) {
 	return changes, nil
 }
 
-// Sync writes the definitions cfg implies and removes stale agentic-* files.
-// Only files carrying Prefix are ever written or deleted.
+// Sync writes the definitions cfg implies and removes stale files.
+// Only files carrying Prefix or LegacyPrefix are ever written or deleted.
 func Sync(cfg *config.Config, dir string) ([]Change, error) {
 	changes, err := Diff(cfg, dir)
 	if err != nil {
@@ -285,7 +291,7 @@ func Fingerprint(cfg *config.Config) string {
 }
 
 // declinedFile is where a declined fingerprint is remembered, inside the
-// agentic data dir (not ~/.claude — this is agentic's own state).
+// gremlord data dir (not ~/.claude — this is gremlord's own state).
 func declinedFile(dataDir string) string {
 	return filepath.Join(dataDir, "agents-declined")
 }
@@ -310,4 +316,10 @@ func RecordDeclined(dataDir, fingerprint string) error {
 // so a later change offers again).
 func ClearDeclined(dataDir string) {
 	os.Remove(declinedFile(dataDir))
+}
+
+// owned reports whether a filename is one this package manages, under either
+// the current or the pre-rename prefix.
+func owned(name string) bool {
+	return strings.HasPrefix(name, Prefix) || strings.HasPrefix(name, LegacyPrefix)
 }

@@ -4,19 +4,19 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/maorbril/agentic/internal/agents"
-	"github.com/maorbril/agentic/internal/config"
+	"github.com/gremlord/gremlord/internal/agents"
+	"github.com/gremlord/gremlord/internal/config"
 )
 
 // noticeAgentDrift prints a one-shot, NON-BLOCKING notice when the generated
-// per-alias subagents have drifted from config, pointing at `agentic agents
+// per-alias subagents have drifted from config, pointing at `gremlord agents
 // sync`. It deliberately does not read stdin: this runs immediately before
 // the interactive claude child takes over the terminal, and the tty may be
 // in raw mode (Enter arrives as \r, not \n) — a cooked line read would hang
 // forever. Quiet when in sync, when not on a terminal, when opted out, or
 // when the user already dismissed this exact config state.
 func noticeAgentDrift(cfg *config.Config, dataDir string) {
-	if os.Getenv("AGENTIC_NO_AGENT_SYNC") != "" {
+	if config.Getenv("NO_AGENT_SYNC") != "" {
 		return
 	}
 	if !isTerminal(os.Stderr) {
@@ -35,9 +35,9 @@ func noticeAgentDrift(cfg *config.Config, dataDir string) {
 		return // already shown for this exact config state
 	}
 
-	fmt.Fprintf(os.Stderr, "\nagentic: %s — run `agentic agents sync` to make them selectable (e.g. subagent_type: %q).\n",
+	fmt.Fprintf(os.Stderr, "\ngremlord: %s — run `gremlord agents sync` to make them selectable (e.g. subagent_type: %q).\n",
 		summarize(changes), firstName(changes))
-	fmt.Fprintln(os.Stderr, "  (won't mention again until your model aliases change; AGENTIC_NO_AGENT_SYNC=1 to silence)")
+	fmt.Fprintln(os.Stderr, "  (won't mention again until your model aliases change; GREMLORD_NO_AGENT_SYNC=1 to silence)")
 
 	// Record now so the notice is one-shot per config state — we're not
 	// waiting for an answer, so "shown" is the only signal we have.

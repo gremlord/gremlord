@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// ~/.agentic/env holds KEY=VALUE lines (0600) so provider keys don't
+// ~/.gremlord/env holds KEY=VALUE lines (0600) so provider keys don't
 // depend on which shell happened to launch the router leader. Process
 // environment still wins when set.
 
@@ -19,13 +19,13 @@ var envFile struct {
 	values map[string]string
 }
 
-// EnvFileLookup returns the value for name from ~/.agentic/env, or "".
+// EnvFileLookup returns the value for name from ~/.gremlord/env, or "".
 func EnvFileLookup(name string) string {
 	dir, err := DataDir()
 	if err != nil {
 		return ""
 	}
-	path := filepath.Join(dir, "env")
+	path := readPath(filepath.Join(dir, "env"))
 
 	envFile.mu.Lock()
 	defer envFile.mu.Unlock()

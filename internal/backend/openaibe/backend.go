@@ -9,10 +9,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/maorbril/agentic/internal/anthropic"
-	"github.com/maorbril/agentic/internal/backend"
-	"github.com/maorbril/agentic/internal/openai"
-	"github.com/maorbril/agentic/internal/tokens"
+	"github.com/gremlord/gremlord/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/backend"
+	"github.com/gremlord/gremlord/internal/openai"
+	"github.com/gremlord/gremlord/internal/tokens"
 )
 
 type Backend struct {
@@ -26,24 +26,24 @@ func New() *Backend {
 func (b *Backend) Messages(ctx context.Context, call *backend.Call, w http.ResponseWriter) backend.Result {
 	req, err := anthropic.ParseRequest(call.Raw)
 	if err != nil {
-		anthropic.WriteError(w, 400, "invalid_request_error", "agentic: "+err.Error())
+		anthropic.WriteError(w, 400, "invalid_request_error", "gremlord: "+err.Error())
 		return backend.Result{Status: 400, ErrType: "invalid_request_error"}
 	}
 	chatReq, err := TranslateRequest(req, call.Route)
 	if err != nil {
-		anthropic.WriteError(w, 400, "invalid_request_error", "agentic translate: "+err.Error())
+		anthropic.WriteError(w, 400, "invalid_request_error", "gremlord translate: "+err.Error())
 		return backend.Result{Status: 400, ErrType: "invalid_request_error"}
 	}
 	body, err := json.Marshal(chatReq)
 	if err != nil {
-		anthropic.WriteError(w, 500, "api_error", "agentic: "+err.Error())
+		anthropic.WriteError(w, 500, "api_error", "gremlord: "+err.Error())
 		return backend.Result{Status: 500, ErrType: "api_error"}
 	}
 
 	u := strings.TrimSuffix(call.Route.Provider.BaseURL, "/") + "/chat/completions"
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
 	if err != nil {
-		anthropic.WriteError(w, 500, "api_error", "agentic: "+err.Error())
+		anthropic.WriteError(w, 500, "api_error", "gremlord: "+err.Error())
 		return backend.Result{Status: 500, ErrType: "api_error"}
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -84,19 +84,19 @@ func (b *Backend) Messages(ctx context.Context, call *backend.Call, w http.Respo
 
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		msg := "agentic: reading upstream body: " + err.Error()
+		msg := "gremlord: reading upstream body: " + err.Error()
 		anthropic.WriteError(w, 500, "api_error", msg)
 		return backend.Result{Status: 502, ErrType: "api_error", ErrMsg: msg}
 	}
 	var parsed openai.ChatResponse
 	if err := json.Unmarshal(raw, &parsed); err != nil {
-		msg := "agentic: upstream body unparseable: " + err.Error()
+		msg := "gremlord: upstream body unparseable: " + err.Error()
 		anthropic.WriteError(w, 500, "api_error", msg)
 		return backend.Result{Status: 502, ErrType: "api_error", ErrMsg: msg}
 	}
 	out, err := TranslateResponse(&parsed, call.Envelope.Model)
 	if err != nil {
-		msg := "agentic translate: " + err.Error()
+		msg := "gremlord translate: " + err.Error()
 		anthropic.WriteError(w, 500, "api_error", msg)
 		return backend.Result{Status: 502, ErrType: "api_error", ErrMsg: msg}
 	}
@@ -113,7 +113,7 @@ func (b *Backend) Messages(ctx context.Context, call *backend.Call, w http.Respo
 func (b *Backend) CountTokens(ctx context.Context, call *backend.Call, w http.ResponseWriter) backend.Result {
 	req, err := anthropic.ParseRequest(call.Raw)
 	if err != nil {
-		anthropic.WriteError(w, 400, "invalid_request_error", "agentic: "+err.Error())
+		anthropic.WriteError(w, 400, "invalid_request_error", "gremlord: "+err.Error())
 		return backend.Result{Status: 400, ErrType: "invalid_request_error"}
 	}
 	n := tokens.ScaleCount(call.EstimateInput(req), tokens.ScaleFactor(call.ScaleBudget()))

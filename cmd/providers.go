@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/maorbril/agentic/internal/config"
+	"github.com/gremlord/gremlord/internal/config"
 )
 
 var (
@@ -71,16 +71,16 @@ var providersAddCmd = &cobra.Command{
 	Short: "Add or update a provider",
 	Long: `Add an upstream provider. Examples:
 
-  agentic providers add openai --type openai --base-url https://api.openai.com/v1 \
+  gremlord providers add openai --type openai --base-url https://api.openai.com/v1 \
       --key-env OPENAI_API_KEY --max-tokens-param max_completion_tokens
-  agentic providers add xai   --type openai --base-url https://api.x.ai/v1 --key-env XAI_API_KEY
-  agentic providers add local --type openai --base-url http://localhost:11434/v1 --key-env ""
+  gremlord providers add xai   --type openai --base-url https://api.x.ai/v1 --key-env XAI_API_KEY
+  gremlord providers add local --type openai --base-url http://localhost:11434/v1 --key-env ""
 
 A "cli" provider delegates whole tasks to a locally installed coding-agent
 CLI running under your own subscription login (codex login / grok login):
 
-  agentic providers add codex --type cli --dialect codex --sandbox workspace-write
-  agentic providers add grokcli --type cli --dialect grok`,
+  gremlord providers add codex --type cli --dialect codex --sandbox workspace-write
+  gremlord providers add grokcli --type cli --dialect grok`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if provType == config.ProviderCLI {

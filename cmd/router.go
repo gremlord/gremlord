@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/maorbril/agentic/internal/launch"
-	"github.com/maorbril/agentic/internal/router"
+	"github.com/gremlord/gremlord/internal/launch"
+	"github.com/gremlord/gremlord/internal/router"
 )
 
 var routerCmd = &cobra.Command{
@@ -34,7 +34,7 @@ var routerRunCmd = &cobra.Command{
 		mgr := &router.Manager{Port: cfg.Router.Port, Token: token, DataDir: dataDir, Log: log}
 		ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
-		fmt.Fprintf(os.Stderr, "agentic router on %s (ctrl-c to stop)\n", mgr.BaseURL())
+		fmt.Fprintf(os.Stderr, "gremlord router on %s (ctrl-c to stop)\n", mgr.BaseURL())
 		return mgr.Run(ctx)
 	},
 }

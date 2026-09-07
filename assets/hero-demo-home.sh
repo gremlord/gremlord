@@ -7,15 +7,15 @@
 #   HOME="$DEMO_HOME" vhs assets/hero.tape
 #
 # ~/.claude is symlinked through to the real one, so the recorded `claude` looks
-# like a normal install; only agentic's own state (~/.agentic) is synthetic.
+# like a normal install; only gremlord's own state (~/.gremlord) is synthetic.
 # The router runs on its own port so it never disturbs live sessions.
 set -euo pipefail
 
 REAL_HOME="${REAL_HOME:-$HOME}"
-DEMO="${1:-$(mktemp -d -t agentic-hero)}"
-mkdir -p "$DEMO/.agentic"
+DEMO="${1:-$(mktemp -d -t gremlord-hero)}"
+mkdir -p "$DEMO/.gremlord"
 
-cat > "$DEMO/.agentic/config.yaml" <<'YAML'
+cat > "$DEMO/.gremlord/config.yaml" <<'YAML'
 version: 1
 default_profile: main
 router:
@@ -77,17 +77,17 @@ YAML
 
 # Real provider keys, so the KEY column is honest. They never render on screen —
 # `models list` prints only ✓/✗ — and this HOME is a throwaway outside the repo.
-if [ -f "$REAL_HOME/.agentic/env" ]; then
-    cp "$REAL_HOME/.agentic/env" "$DEMO/.agentic/env"
+if [ -f "$REAL_HOME/.gremlord/env" ]; then
+    cp "$REAL_HOME/.gremlord/env" "$DEMO/.gremlord/env"
 else
-    printf 'ANTHROPIC_API_KEY=demo\nOPENAI_API_KEY=demo\nXAI_API_KEY=demo\n' > "$DEMO/.agentic/env"
+    printf 'ANTHROPIC_API_KEY=demo\nOPENAI_API_KEY=demo\nXAI_API_KEY=demo\n' > "$DEMO/.gremlord/env"
 fi
-[ -f "$REAL_HOME/.agentic/token" ] && cp "$REAL_HOME/.agentic/token" "$DEMO/.agentic/token"
-chmod 600 "$DEMO/.agentic/config.yaml" "$DEMO/.agentic/env" "$DEMO/.agentic/token" 2>/dev/null || true
+[ -f "$REAL_HOME/.gremlord/token" ] && cp "$REAL_HOME/.gremlord/token" "$DEMO/.gremlord/token"
+chmod 600 "$DEMO/.gremlord/config.yaml" "$DEMO/.gremlord/env" "$DEMO/.gremlord/token" 2>/dev/null || true
 
 # Claude Code keeps its real config, so the splash is a normal install — but
 # with MCP servers dropped, since an unauthenticated one paints a warning across
-# the hero frame that has nothing to do with agentic.
+# the hero frame that has nothing to do with gremlord.
 ln -sfn "$REAL_HOME/.claude" "$DEMO/.claude"
 if [ -e "$REAL_HOME/.claude.json" ]; then
     python3 - "$REAL_HOME/.claude.json" "$DEMO/.claude.json" <<'PYEOF'
@@ -108,8 +108,8 @@ fi
 # A synthetic day: one aggregate row per model. Costs are computed from the
 # pricing above, so the breakdown is internally consistent.
 NOW=$(date +%s)
-rm -f "$DEMO/.agentic/agentic.db"
-sqlite3 "$DEMO/.agentic/agentic.db" <<SQL
+rm -f "$DEMO/.gremlord/agentic.db"
+sqlite3 "$DEMO/.gremlord/agentic.db" <<SQL
 CREATE TABLE usage_events (
   id                INTEGER PRIMARY KEY,
   ts                INTEGER NOT NULL,

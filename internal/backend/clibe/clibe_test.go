@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maorbril/agentic/internal/anthropic"
-	"github.com/maorbril/agentic/internal/backend"
-	"github.com/maorbril/agentic/internal/config"
+	"github.com/gremlord/gremlord/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/backend"
+	"github.com/gremlord/gremlord/internal/config"
 )
 
 type fakeExecutor struct {

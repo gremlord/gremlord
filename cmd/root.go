@@ -1,4 +1,4 @@
-// Package cmd is the agentic CLI.
+// Package cmd is the gremlord CLI.
 package cmd
 
 import (
@@ -10,10 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/launch"
-	"github.com/maorbril/agentic/internal/logrotate"
-	"github.com/maorbril/agentic/internal/router"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/launch"
+	"github.com/gremlord/gremlord/internal/logrotate"
+	"github.com/gremlord/gremlord/internal/router"
 )
 
 var (
@@ -25,9 +25,9 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "agentic [flags] [-- claude args...]",
+	Use:   "gremlord [flags] [-- claude args...]",
 	Short: "Multi-model, cost-controlled harness wrapping Claude Code",
-	Long: `agentic launches Claude Code through a local router that can serve
+	Long: `gremlord launches Claude Code through a local router that can serve
 Anthropic, OpenAI, xAI, and open-weight models, with budgets and spend
 tracking. Everything after -- is passed to claude verbatim.`,
 	Version:       router.Version,
@@ -54,7 +54,7 @@ tracking. Everything after -- is passed to claude verbatim.`,
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&flagProfile, "profile", "p", "", "profile from ~/.agentic/config.yaml")
+	rootCmd.Flags().StringVarP(&flagProfile, "profile", "p", "", "profile from ~/.gremlord/config.yaml")
 	rootCmd.Flags().StringVar(&flagModel, "model", "", "one-shot main-model alias override")
 	rootCmd.Flags().StringVar(&flagName, "name", "", "session name (forwarded to claude)")
 	rootCmd.Flags().BoolVar(&flagNoClauder, "no-clauder", false, "")
@@ -67,7 +67,7 @@ func init() {
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "agentic:", err)
+		fmt.Fprintln(os.Stderr, "gremlord:", err)
 		os.Exit(1)
 	}
 }
@@ -79,7 +79,7 @@ func loadConfig() (*config.Config, string, error) {
 	}
 	cfg, err := config.Load()
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, "", fmt.Errorf("no config found — run `agentic setup` first")
+		return nil, "", fmt.Errorf("no config found — run `gremlord setup` first")
 	}
 	if err != nil {
 		return nil, "", err

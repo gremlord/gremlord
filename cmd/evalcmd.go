@@ -12,8 +12,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/maorbril/agentic/internal/config"
-	evalpkg "github.com/maorbril/agentic/internal/eval"
+	"github.com/gremlord/gremlord/internal/config"
+	evalpkg "github.com/gremlord/gremlord/internal/eval"
 )
 
 var evalCmd = &cobra.Command{

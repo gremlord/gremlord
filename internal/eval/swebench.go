@@ -63,7 +63,7 @@ func (e SWEBenchEnv) validate() error {
 
 // MaterializeSWEBenchBridge writes the embedded pinned bridge to outputDir
 // and returns an environment ready for Check/Resolve/Grade calls. Keeping the
-// bridge embedded makes a released single-file agentic binary self-contained;
+// bridge embedded makes a released single-file gremlord binary self-contained;
 // users only need Python + `swebench==4.1.0` + Docker, not the source tree.
 func MaterializeSWEBenchBridge(outputDir, python string) (SWEBenchEnv, error) {
 	if outputDir == "" {
@@ -434,7 +434,7 @@ func runSWEBenchBridgeDir(ctx context.Context, env SWEBenchEnv, args []string, d
 	cleanup := func() {}
 	if dir == "" {
 		var err error
-		dir, err = os.MkdirTemp("", "agentic-swebench-")
+		dir, err = os.MkdirTemp("", "gremlord-swebench-")
 		if err != nil {
 			return err
 		}

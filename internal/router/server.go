@@ -13,16 +13,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/maorbril/agentic/internal/anthropic"
-	"github.com/maorbril/agentic/internal/backend"
-	"github.com/maorbril/agentic/internal/backend/anthropicbe"
-	"github.com/maorbril/agentic/internal/backend/clibe"
-	"github.com/maorbril/agentic/internal/backend/openaibe"
-	"github.com/maorbril/agentic/internal/budget"
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/pricing"
-	"github.com/maorbril/agentic/internal/store"
-	"github.com/maorbril/agentic/internal/tokens"
+	"github.com/gremlord/gremlord/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/backend"
+	"github.com/gremlord/gremlord/internal/backend/anthropicbe"
+	"github.com/gremlord/gremlord/internal/backend/clibe"
+	"github.com/gremlord/gremlord/internal/backend/openaibe"
+	"github.com/gremlord/gremlord/internal/budget"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/pricing"
+	"github.com/gremlord/gremlord/internal/store"
+	"github.com/gremlord/gremlord/internal/tokens"
+	"github.com/gremlord/gremlord/internal/wire"
 )
 
 type Server struct {
@@ -55,7 +56,7 @@ func NewServer(cfg *config.Config, token, dataDir string, st *store.Store, logge
 	return s
 }
 
-// Reload re-reads the config file; called by /agentic/reload so config CLI
+// Reload re-reads the config file; called by the reload path so config CLI
 // edits apply to live sessions without restart.
 func (s *Server) Reload() error {
 	cfg, err := config.Load()
@@ -74,8 +75,11 @@ func (s *Server) Reload() error {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /agentic/health", s.handleHealth)
-	mux.HandleFunc("POST /agentic/reload", s.auth(s.handleReload))
+	mux.HandleFunc("GET "+wire.PathHealth, s.handleHealth)
+	mux.HandleFunc("POST "+wire.PathReload, s.auth(s.handleReload))
+	// Pre-rename paths, so an gremlord CLI can still reach this router.
+	mux.HandleFunc("GET "+wire.LegacyPathHealth, s.handleHealth)
+	mux.HandleFunc("POST "+wire.LegacyPathReload, s.auth(s.handleReload))
 	mux.HandleFunc("POST /v1/messages", s.auth(s.handleMessages(false)))
 	mux.HandleFunc("POST /v1/messages/count_tokens", s.auth(s.handleMessages(true)))
 	// Catch-all: unknown /v1/* endpoints go to the default anthropic
@@ -105,7 +109,7 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		if subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) != 1 {
 			anthropic.WriteError(w, 401, "authentication_error",
-				"agentic router: invalid local token (launch sessions via `agentic`)")
+				"gremlord router: invalid local token (launch sessions via `gremlord`)")
 			return
 		}
 		next(w, r)
@@ -117,24 +121,24 @@ func (s *Server) handleMessages(countTokens bool) http.HandlerFunc {
 		start := time.Now()
 		raw, err := io.ReadAll(r.Body)
 		if err != nil {
-			anthropic.WriteError(w, 400, "invalid_request_error", "agentic: reading body: "+err.Error())
+			anthropic.WriteError(w, 400, "invalid_request_error", "gremlord: reading body: "+err.Error())
 			return
 		}
 		env, err := anthropic.ParseEnvelope(raw)
 		if err != nil || env.Model == "" {
-			anthropic.WriteError(w, 400, "invalid_request_error", "agentic: request body is not a Messages API request")
+			anthropic.WriteError(w, 400, "invalid_request_error", "gremlord: request body is not a Messages API request")
 			return
 		}
 		cfg := s.cfg.Load()
 		calib := s.calib.get()
-		sessionID := r.Header.Get("X-Agentic-Session")
+		sessionID := wire.Session(r.Header)
 		// gauge is the budget this session's client-facing token counts
 		// are scaled against — one budget per routing rule, so the
 		// context gauge does not change meaning when the tier does. 0
 		// for a directly-addressed alias or a pinned session: those
 		// scale against the model they name.
 		gauge := 0
-		pinModel := r.Header.Get("X-Agentic-Pin-Model")
+		pinModel := wire.PinModel(r.Header)
 		resolveAlias := env.Model
 		if pinModel != "" {
 			// A pinned session (eval candidates, pin_tiers profiles) must
@@ -177,7 +181,7 @@ func (s *Server) handleMessages(countTokens bool) http.HandlerFunc {
 		}
 		route, err := cfg.Resolve(resolveAlias)
 		if err != nil {
-			anthropic.WriteError(w, 404, "not_found_error", "agentic: "+err.Error()+" (see ~/.agentic/config.yaml)")
+			anthropic.WriteError(w, 404, "not_found_error", "gremlord: "+err.Error()+" (see ~/.gremlord/config.yaml)")
 			return
 		}
 
@@ -191,7 +195,7 @@ func (s *Server) handleMessages(countTokens bool) http.HandlerFunc {
 			if req, perr := anthropic.ParseRequest(raw); perr == nil {
 				comp = tokens.Compose(req)
 				if overflow, required, budget := promptTooLong(route, req, calib); overflow {
-					msg := fmt.Sprintf("agentic: request too large for model %q context budget "+
+					msg := fmt.Sprintf("gremlord: request too large for model %q context budget "+
 						"(estimated %d + reserved output exceeds budget %d); "+
 						"reduce the conversation or switch models",
 						route.Model.ID, required, budget)
@@ -206,7 +210,7 @@ func (s *Server) handleMessages(countTokens bool) http.HandlerFunc {
 			// oversized bodies — common with accumulated images/attachments —
 			// before dispatch, instead of a mangled upstream 413 retry loop.
 			if tooLarge, size, cap := bodyTooLarge(route, int64(len(raw))); tooLarge {
-				msg := fmt.Sprintf("agentic: request body too large for provider %q "+
+				msg := fmt.Sprintf("gremlord: request body too large for provider %q "+
 					"(%d bytes exceeds max_request_bytes %d); "+
 					"run /compact or remove images/attachments",
 					route.ProviderName, size, cap)
@@ -218,10 +222,10 @@ func (s *Server) handleMessages(countTokens bool) http.HandlerFunc {
 			}
 		}
 
-		profile := r.Header.Get("X-Agentic-Profile")
+		profile := wire.Profile(r.Header)
 		if !countTokens && route.Provider.Type != config.ProviderCLI {
 			// CLI delegation spends against the peer CLI's subscription, outside
-			// agentic's pricing data. A $0 API budget must not block capacity it
+			// gremlord's pricing data. A $0 API budget must not block capacity it
 			// neither meters nor pays for.
 			if msg := s.gate.Check(profile); msg != "" {
 				// 400 deliberately — 429/5xx would make Claude Code retry-spin;
@@ -246,7 +250,7 @@ func (s *Server) handleMessages(countTokens bool) http.HandlerFunc {
 			be = s.cli
 		default:
 			anthropic.WriteError(w, 501, "api_error",
-				fmt.Sprintf("agentic: provider type %q not implemented (model %q)", route.Provider.Type, env.Model))
+				fmt.Sprintf("gremlord: provider type %q not implemented (model %q)", route.Provider.Type, env.Model))
 			return
 		}
 		var res backend.Result
@@ -271,14 +275,14 @@ func (s *Server) recordUsage(r *http.Request, route config.Resolved, alias strin
 		u.InputTokens, u.OutputTokens, u.CacheReadInputTokens, u.CacheCreationInputTokens)
 	if route.Provider.Type == config.ProviderCLI {
 		// Even when the optional CLI model ID happens to match an entry in the
-		// API price table, subscription spend is opaque to agentic.
+		// API price table, subscription spend is opaque to gremlord.
 		cost, priced = 0, false
 	}
 	budget := route.Model.ContextBudget()
 	ev := store.UsageEvent{
 		TS:               time.Now(),
-		SessionID:        r.Header.Get("X-Agentic-Session"),
-		Profile:          r.Header.Get("X-Agentic-Profile"),
+		SessionID:        wire.Session(r.Header),
+		Profile:          wire.Profile(r.Header),
 		Provider:         route.ProviderName,
 		Model:            route.Model.ID,
 		Alias:            alias,
@@ -338,7 +342,7 @@ func (s *Server) handleCatchAll(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfg.Load()
 	p, ok := cfg.Providers[config.ProviderAnthropic]
 	if !ok {
-		anthropic.WriteError(w, 404, "not_found_error", "agentic: no anthropic provider configured for "+r.URL.Path)
+		anthropic.WriteError(w, 404, "not_found_error", "gremlord: no anthropic provider configured for "+r.URL.Path)
 		return
 	}
 	u := strings.TrimSuffix(p.BaseURL, "/") + r.URL.Path
@@ -347,7 +351,7 @@ func (s *Server) handleCatchAll(w http.ResponseWriter, r *http.Request) {
 	}
 	req, err := http.NewRequestWithContext(r.Context(), r.Method, u, r.Body)
 	if err != nil {
-		anthropic.WriteError(w, 500, "api_error", "agentic: "+err.Error())
+		anthropic.WriteError(w, 500, "api_error", "gremlord: "+err.Error())
 		return
 	}
 	req.Header = r.Header.Clone()

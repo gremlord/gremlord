@@ -21,7 +21,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/maorbril/agentic/internal/store"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/store"
+
+	"github.com/gremlord/gremlord/internal/wire"
 )
 
 const SchemaVersion = 1
@@ -249,7 +252,7 @@ type Options struct {
 	Token     string
 	Profile   string
 	ClaudeBin string
-	// DataDir is ~/.agentic; the run reads back usage and routing telemetry
+	// DataDir is ~/.gremlord; the run reads back usage and routing telemetry
 	// from its SQLite database to attribute cost per candidate.
 	DataDir string
 	// Docker configures the SWE-bench Docker candidate lifecycle. Only
@@ -328,9 +331,9 @@ type VerifierResult struct {
 }
 
 // SWEBenchVerdict is the subset of the official per-instance report
-// (swebench.harness.grading.get_eval_report) agentic surfaces. FAIL_TO_PASS
+// (swebench.harness.grading.get_eval_report) gremlord surfaces. FAIL_TO_PASS
 // and PASS_TO_PASS pass/fail lists and the resolved verdict come directly
-// from the official grader; agentic does not recompute them.
+// from the official grader; gremlord does not recompute them.
 type SWEBenchVerdict struct {
 	Resolved      bool     `json:"resolved"`
 	PatchApplied  bool     `json:"patch_applied"`
@@ -424,7 +427,7 @@ func (r *Runner) Run(ctx context.Context, manifest *Manifest) (*Summary, error) 
 		r.Options.Timeout = 30 * time.Minute
 	}
 	if r.Options.OutputDir == "" {
-		r.Options.OutputDir = filepath.Join(".agentic", "evals", manifest.Name)
+		r.Options.OutputDir = filepath.Join(".gremlord", "evals", manifest.Name)
 	}
 	if r.Options.ClaudeBin == "" {
 		r.Options.ClaudeBin = "claude"
@@ -688,7 +691,7 @@ func (r *Runner) telemetry(sessionID string) (Usage, []RouteStep) {
 	if r.Options.DataDir == "" {
 		return Usage{}, nil
 	}
-	path := filepath.Join(r.Options.DataDir, "agentic.db")
+	path := filepath.Join(r.Options.DataDir, config.DBName)
 	var usage Usage
 	var trace []RouteStep
 	for attempt := 0; attempt < telemetryAttempts; attempt++ {
@@ -920,7 +923,11 @@ func evalEnv(env []string, o Options, sid, model string) []string {
 	env = setEnv(env, "ANTHROPIC_BASE_URL", o.BaseURL)
 	env = setEnv(env, "ANTHROPIC_AUTH_TOKEN", o.Token)
 	env = unsetEnv(env, "ANTHROPIC_API_KEY")
-	env = setEnv(env, "ANTHROPIC_CUSTOM_HEADERS", fmt.Sprintf("X-Agentic-Session: %s\nX-Agentic-Profile: %s\nX-Agentic-Pin-Model: %s", sid, o.Profile, model))
+	env = setEnv(env, "ANTHROPIC_CUSTOM_HEADERS", fmt.Sprintf("%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s\n%s: %s",
+		wire.HeaderSession, sid, wire.HeaderProfile, o.Profile, wire.HeaderPinModel, model,
+		wire.LegacyHeaderSession, sid, wire.LegacyHeaderProfile, o.Profile, wire.LegacyHeaderPinModel, model))
+	env = setEnv(env, config.EnvName("SESSION_ID"), sid)
+	env = setEnv(env, config.EnvName("PROFILE"), o.Profile)
 	env = setEnv(env, "AGENTIC_SESSION_ID", sid)
 	env = setEnv(env, "AGENTIC_PROFILE", o.Profile)
 	// Pin all tier fallbacks to the candidate model so subagent spawns don't

@@ -16,9 +16,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/maorbril/agentic/internal/config"
-	"github.com/maorbril/agentic/internal/router"
-	"github.com/maorbril/agentic/internal/store"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/router"
+	"github.com/gremlord/gremlord/internal/store"
+	"github.com/gremlord/gremlord/internal/wire"
 )
 
 type Options struct {
@@ -62,7 +63,7 @@ func Run(ctx context.Context, cfg *config.Config, dataDir string, opts Options, 
 	if profName != "" {
 		p, ok := cfg.Profiles[profName]
 		if !ok {
-			return fmt.Errorf("profile %q not found in ~/.agentic/config.yaml", profName)
+			return fmt.Errorf("profile %q not found in ~/.gremlord/config.yaml", profName)
 		}
 		prof = p
 	}
@@ -71,7 +72,7 @@ func Run(ctx context.Context, cfg *config.Config, dataDir string, opts Options, 
 	sessionID := newSessionID()
 
 	if prof.Passthrough || opts.Passthrough {
-		fmt.Fprintf(os.Stderr, "agentic: passthrough profile — subscription billing, cost tracking unavailable\n")
+		fmt.Fprintf(os.Stderr, "gremlord: passthrough profile — subscription billing, cost tracking unavailable\n")
 	} else {
 		token, err := Token(dataDir)
 		if err != nil {
@@ -92,7 +93,7 @@ func Run(ctx context.Context, cfg *config.Config, dataDir string, opts Options, 
 		model := prof.Model
 		if opts.ModelFlag != "" {
 			if cfg.IsCLIAlias(opts.ModelFlag) {
-				return fmt.Errorf("cli alias %q is only available as an explicit subagent (agentic-%s), not a session model", opts.ModelFlag, opts.ModelFlag)
+				return fmt.Errorf("cli alias %q is only available as an explicit subagent (gremlord-%s), not a session model", opts.ModelFlag, opts.ModelFlag)
 			}
 			model = opts.ModelFlag
 		}
@@ -107,7 +108,7 @@ func Run(ctx context.Context, cfg *config.Config, dataDir string, opts Options, 
 
 		// Notice (non-blocking) when the per-alias subagents have drifted from
 		// config. Router-backed sessions only — a passthrough profile doesn't
-		// resolve agentic aliases, so the generated agents wouldn't work there.
+		// resolve gremlord aliases, so the generated agents wouldn't work there.
 		noticeAgentDrift(cfg, dataDir)
 	}
 
@@ -137,10 +138,10 @@ func Run(ctx context.Context, cfg *config.Config, dataDir string, opts Options, 
 }
 
 // sessionEnv assembles the child process environment for a non-passthrough
-// profile: router creds, model selection, and the X-Agentic-* headers Claude
+// profile: router creds, model selection, and the X-Gremlord-* headers Claude
 // Code carries transparently on every request so the router can attribute
 // spend to this session and (when pinned) enforce the pin. cwd rides along as
-// X-Agentic-Cwd so cli-delegation backends run the peer CLI in the session's
+// X-Gremlord-Cwd so cli-delegation backends run the peer CLI in the session's
 // directory (the router leader is a shared long-lived process whose own cwd
 // is meaningless). Extracted from Run so PinTiers behavior is directly
 // testable without spawning a router or a claude process.
@@ -156,7 +157,8 @@ func sessionEnv(env []string, baseURL, token, sessionID, profName string, prof c
 	cwd = strings.NewReplacer("\n", "", "\r", "").Replace(cwd)
 	cwdHeader := ""
 	if cwd != "" {
-		cwdHeader = "\nX-Agentic-Cwd: " + cwd
+		cwdHeader = "\n" + wire.HeaderCwd + ": " + cwd +
+			"\n" + wire.LegacyHeaderCwd + ": " + cwd
 	}
 	if prof.PinTiers && model != "" {
 		// Pin every tier fallback — including Claude Code's own subagent
@@ -170,7 +172,7 @@ func sessionEnv(env []string, baseURL, token, sessionID, profName string, prof c
 		env = setEnv(env, "ANTHROPIC_DEFAULT_HAIKU_MODEL", model)
 		env = setEnv(env, "CLAUDE_CODE_SUBAGENT_MODEL", model)
 		env = setEnv(env, "ANTHROPIC_CUSTOM_HEADERS",
-			fmt.Sprintf("X-Agentic-Session: %s\nX-Agentic-Profile: %s\nX-Agentic-Pin-Model: %s%s", sessionID, profName, model, cwdHeader))
+			sessionHeaders(sessionID, profName, model, cwdHeader))
 	} else {
 		if prof.SmallFast != "" {
 			env = setEnv(env, "ANTHROPIC_SMALL_FAST_MODEL", prof.SmallFast)
@@ -179,8 +181,12 @@ func sessionEnv(env []string, baseURL, token, sessionID, profName string, prof c
 			env = setEnv(env, "ANTHROPIC_DEFAULT_"+strings.ToUpper(tier)+"_MODEL", alias)
 		}
 		env = setEnv(env, "ANTHROPIC_CUSTOM_HEADERS",
-			fmt.Sprintf("X-Agentic-Session: %s\nX-Agentic-Profile: %s%s", sessionID, profName, cwdHeader))
+			sessionHeaders(sessionID, profName, "", cwdHeader))
 	}
+	// Both spellings for one release: a ~/.claude/settings.json statusLine
+	// still pointing at the old agentic executable reads only AGENTIC_*.
+	env = setEnv(env, config.EnvName("SESSION_ID"), sessionID)
+	env = setEnv(env, config.EnvName("PROFILE"), profName)
 	env = setEnv(env, "AGENTIC_SESSION_ID", sessionID)
 	env = setEnv(env, "AGENTIC_PROFILE", profName)
 	env = enableToolSearch(env, prof)
@@ -190,8 +196,8 @@ func sessionEnv(env []string, baseURL, token, sessionID, profName string, prof c
 	return env
 }
 
-// autoApprovedTools is the tool allowlist every agentic session runs with.
-// It is the set `clauder wrap --slave` used to pass before agentic spawned
+// autoApprovedTools is the tool allowlist every gremlord session runs with.
+// It is the set `clauder wrap --slave` used to pass before gremlord spawned
 // claude itself, kept identical so the launch path change is invisible.
 // Allowlisting mcp__clauder__* is inert when clauder is not installed.
 var autoApprovedTools = []string{
@@ -221,7 +227,7 @@ func buildChild(opts Options) []string {
 }
 
 func recordSession(dataDir, id, profile string, start bool) {
-	st, err := store.Open(filepath.Join(dataDir, "agentic.db"))
+	st, err := store.Open(filepath.Join(dataDir, config.DBName))
 	if err != nil {
 		return
 	}
@@ -235,7 +241,7 @@ func recordSession(dataDir, id, profile string, start bool) {
 }
 
 func printSummary(dataDir string, cfg *config.Config, sessionID, profile string) {
-	st, err := store.OpenReadOnly(filepath.Join(dataDir, "agentic.db"))
+	st, err := store.OpenReadOnly(filepath.Join(dataDir, config.DBName))
 	if err != nil {
 		return
 	}
@@ -243,7 +249,7 @@ func printSummary(dataDir string, cfg *config.Config, sessionID, profile string)
 	dayStart := time.Now().Truncate(24 * time.Hour)
 	sess, _ := st.TotalSince(time.Time{}, "", sessionID)
 	day, _ := st.TotalSince(dayStart, "", "")
-	line := fmt.Sprintf("agentic: session cost $%.2f (profile: %s) — today $%.2f", sess, profile, day)
+	line := fmt.Sprintf("gremlord: session cost $%.2f (profile: %s) — today $%.2f", sess, profile, day)
 	if cfg.Budgets != nil && cfg.Budgets.Daily > 0 {
 		line += fmt.Sprintf(" / $%.2f daily budget", cfg.Budgets.Daily)
 	}
@@ -303,4 +309,28 @@ func unsetEnv(env []string, key string) []string {
 		}
 	}
 	return out
+}
+
+// sessionHeaders builds the ANTHROPIC_CUSTOM_HEADERS value carrying session
+// identity to the router. Both header spellings go out for one release: the
+// router is whichever binary won the port, so a new launcher may be talking to
+// an agentic router that only reads X-Agentic-*. Dropping the old spelling
+// there would lose spend attribution silently.
+func sessionHeaders(sessionID, profName, pinModel, cwdHeader string) string {
+	pairs := [][2]string{
+		{wire.HeaderSession, sessionID},
+		{wire.LegacyHeaderSession, sessionID},
+		{wire.HeaderProfile, profName},
+		{wire.LegacyHeaderProfile, profName},
+	}
+	if pinModel != "" {
+		pairs = append(pairs,
+			[2]string{wire.HeaderPinModel, pinModel},
+			[2]string{wire.LegacyHeaderPinModel, pinModel})
+	}
+	lines := make([]string, 0, len(pairs))
+	for _, p := range pairs {
+		lines = append(lines, p[0]+": "+p[1])
+	}
+	return strings.Join(lines, "\n") + cwdHeader
 }

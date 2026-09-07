@@ -9,8 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/maorbril/agentic/internal/store"
-	"github.com/maorbril/agentic/internal/tokens"
+	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/store"
+	"github.com/gremlord/gremlord/internal/tokens"
 )
 
 var contextJSON bool
@@ -22,14 +23,14 @@ var contextCmd = &cobra.Command{
 context window was versus what Claude Code's gauge saw. Use it to verify
 scaling behavior and to tune context_window / effective_context: sessions
 that error or degrade at high fullness argue for a lower effective_context.
-Defaults to the most recent session; find ids with 'agentic cost --by session'.`,
+Defaults to the most recent session; find ids with 'gremlord cost --by session'.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		_, dataDir, err := loadConfig()
 		if err != nil {
 			return err
 		}
-		st, err := store.OpenReadOnly(filepath.Join(dataDir, "agentic.db"))
+		st, err := store.OpenReadOnly(filepath.Join(dataDir, config.DBName))
 		if err != nil {
 			return fmt.Errorf("no usage recorded yet (%v)", err)
 		}

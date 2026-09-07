@@ -1,4 +1,4 @@
-// Package selfupdate implements `agentic update` — fetching the latest
+// Package selfupdate implements `gremlord update` — fetching the latest
 // GitHub release and replacing the running binary with it.
 package selfupdate
 
@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const repo = "maorbril/agentic"
+const repo = "gremlord/gremlord"
 
 // Release is the subset of the GitHub releases API response we need.
 type Release struct {
@@ -63,7 +63,7 @@ func AssetName() (string, error) {
 	if runtime.GOOS == "windows" {
 		ext = ".exe"
 	}
-	return fmt.Sprintf("agentic-%s-%s%s", runtime.GOOS, runtime.GOARCH, ext), nil
+	return fmt.Sprintf("gremlord-%s-%s%s", runtime.GOOS, runtime.GOARCH, ext), nil
 }
 
 // Download fetches the named release's binary for the current OS/arch to
@@ -106,11 +106,11 @@ func Download(ctx context.Context, tag, destPath string) error {
 // Apply replaces the binary at exePath with the one at newPath. The current
 // binary is moved aside first rather than overwritten in place — both Unix
 // and Windows leave an already-running executable usable after it's been
-// renamed or unlinked, so this works even when exePath is agentic's own
+// renamed or unlinked, so this works even when exePath is gremlord's own
 // currently-executing binary.
 func Apply(exePath, newPath string) error {
 	dir := filepath.Dir(exePath)
-	oldPath := filepath.Join(dir, ".agentic.old")
+	oldPath := filepath.Join(dir, ".gremlord.old")
 	os.Remove(oldPath) // best effort, leftover from a previous update
 
 	if err := os.Rename(exePath, oldPath); err != nil {

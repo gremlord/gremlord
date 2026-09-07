@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maorbril/agentic/internal/anthropic"
-	"github.com/maorbril/agentic/internal/backend"
-	"github.com/maorbril/agentic/internal/config"
+	"github.com/gremlord/gremlord/internal/anthropic"
+	"github.com/gremlord/gremlord/internal/backend"
+	"github.com/gremlord/gremlord/internal/config"
 )
 
 func mkCall(t *testing.T, body, baseURL, upstreamModel string) *backend.Call {
