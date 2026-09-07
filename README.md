@@ -184,6 +184,12 @@ gremlord budget set --daily 25
 
 Edits apply to live sessions immediately — the CLI hot-reloads the running router.
 
+Launching `gremlord` holds the Gremlord banner for ten seconds before Claude Code
+takes over. `splash_seconds: 0` in the config turns it off permanently, or
+`GREMLORD_SPLASH_SECONDS=0` for one shell. It writes to stderr and is skipped
+entirely when stderr is not a terminal, so pipes, CI and scripted launches never
+wait on it.
+
 A profile bundles a main model, a small/fast model for background tasks, tier mappings (so `/model opus` resolves inside the profile), and optional budgets:
 
 ```yaml

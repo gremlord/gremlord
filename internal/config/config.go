@@ -37,6 +37,9 @@ type Config struct {
 	Profiles       map[string]Profile   `yaml:"profiles"`
 	Budgets        *Budget              `yaml:"budgets"`
 	Pricing        map[string]Price     `yaml:"pricing"`
+	// SplashSeconds holds the launch banner for this many seconds before
+	// Claude Code takes the terminal. nil = default, 0 = off.
+	SplashSeconds *int `yaml:"splash_seconds"`
 }
 
 // RouteRule is a dynamic alias: a cheap classifier model assesses each new

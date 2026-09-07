@@ -112,6 +112,8 @@ func Run(ctx context.Context, cfg *config.Config, dataDir string, opts Options, 
 		noticeAgentDrift(cfg, dataDir)
 	}
 
+	showSplash(cfg)
+
 	child := buildChild(opts)
 	cmd := exec.Command(child[0], child[1:]...)
 	cmd.Env = env

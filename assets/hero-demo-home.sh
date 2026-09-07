@@ -55,6 +55,7 @@ profiles:
         model: qwen
         small_fast: qwen
         budget: {daily: 5.00}
+splash_seconds: 0   # the recording has 22 seconds; do not spend 10 on the banner
 budgets:
     daily: 25
     monthly: 400
