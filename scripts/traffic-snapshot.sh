@@ -22,8 +22,27 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-command -v gh >/dev/null || { echo "gh is required but not found" >&2; exit 1; }
 command -v python3 >/dev/null || { echo "python3 is required but not found" >&2; exit 1; }
+
+# Prefer gh locally; fall back to curl with a token from the environment. The
+# cloud runner that executes this on a schedule has curl and GH_TOKEN but no gh
+# CLI, and a gh-only script silently skips every scheduled run — which loses the
+# 14-day window this exists to preserve.
+TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+if command -v gh >/dev/null 2>&1; then
+    api() { gh api "$1"; }
+elif [ -n "$TOKEN" ] && command -v curl >/dev/null 2>&1; then
+    api() {
+        curl -fsSL \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/$1"
+    }
+else
+    echo "need either the gh CLI, or curl plus GH_TOKEN/GITHUB_TOKEN in the environment" >&2
+    exit 1
+fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/docs/metrics"
@@ -36,17 +55,19 @@ trap 'rm -rf "$WORK"' EXIT
 
 # Traffic endpoints require push access; fail loudly rather than writing zeros.
 for ep in clones views; do
-    if ! gh api "repos/$REPO/traffic/$ep" > "$WORK/$ep.json" 2>"$WORK/$ep.err"; then
+    if ! api "repos/$REPO/traffic/$ep" > "$WORK/$ep.json" 2>"$WORK/$ep.err"; then
         echo "ERROR: could not read repos/$REPO/traffic/$ep" >&2
         echo "  The traffic API needs push access on the repo. Response:" >&2
         sed 's/^/  /' "$WORK/$ep.err" >&2
         exit 1
     fi
 done
-gh api "repos/$REPO/traffic/popular/referrers" > "$WORK/referrers.json"
-gh api "repos/$REPO/traffic/popular/paths"     > "$WORK/paths.json"
-gh api "repos/$REPO"                           > "$WORK/repo.json"
-gh api "repos/$REPO/releases" --paginate --slurp > "$WORK/releases.json"
+api "repos/$REPO/traffic/popular/referrers" > "$WORK/referrers.json"
+api "repos/$REPO/traffic/popular/paths"     > "$WORK/paths.json"
+api "repos/$REPO"                           > "$WORK/repo.json"
+# 100 per page covers every release this project will plausibly have; the
+# reader below accepts either a flat list or gh's paginated list-of-lists.
+api "repos/$REPO/releases?per_page=100"     > "$WORK/releases.json"
 
 python3 - "$WORK" "$OUT" "$TODAY" <<'PY'
 import csv, json, os, sys
@@ -112,8 +133,10 @@ append_snapshot("paths.csv", ["snapshot_date", "path", "title", "count", "unique
                 [[today, p["path"], p["title"], p["count"], p["uniques"]] for p in load("paths")])
 
 repo = load("repo")
-downloads = sum(a["download_count"]
-                for page in load("releases") for rel in page for a in rel["assets"])
+releases = load("releases")
+if releases and isinstance(releases[0], list):
+    releases = [rel for page in releases for rel in page]   # gh --slurp shape
+downloads = sum(a["download_count"] for rel in releases for a in rel["assets"])
 append_snapshot("repo.csv",
                 ["snapshot_date", "stars", "forks", "watchers", "open_issues",
                  "release_downloads"],
