@@ -1,0 +1,11 @@
+snapshot_date,path,title,count,uniques
+2026-09-07,/MaorBril/agentic,Overview,30,22
+2026-09-07,/maorbril/agentic,Overview,15,7
+2026-09-07,/MaorBril/agentic/blob/main/docs/context-scaling.md,/blob/main/docs/context-scaling.md,5,3
+2026-09-07,/MaorBril/agentic/blob/main/examples/swebench-smoke.yaml,/blob/main/examples/swebench-smoke.yaml,4,2
+2026-09-07,/MaorBril/agentic/tree/main/internal,/tree/main/internal,3,2
+2026-09-07,/MaorBril/agentic/pull/21,/pull/21,3,1
+2026-09-07,/MaorBril/agentic/pulse,/pulse,2,2
+2026-09-07,/MaorBril/agentic/pull/18,/pull/18,2,1
+2026-09-07,/MaorBril/agentic/pull/19,/pull/19,2,1
+2026-09-07,/MaorBril/agentic/pull/19/changes,/pull/19/changes,2,1
