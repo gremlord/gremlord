@@ -1,5 +1,44 @@
 # gremlord
 
+```
+                    \    /\  /\  /\    /
+                     \  /  \/  \/  \  /
+                  .-' \/ ()  ()  () \/ '-.
+                .-'   [================]   '-.
+       ,.      /    .-'~~~~~~~~~~~~~~~'-.    \      .,
+      /  \    /   .'   .-----.   .-----.   '.  \   /  \
+     /  /\\  |   /    / .---. \ / .---. \    \  |  //\  \
+    /  /  \\ |  |    | ( (o) )-=-( (o) ) |    |  | //  \  \
+   /  /    \\|  '-'   \ '---' / \ '---' /   '-'  |//    \  \
+  /  /      \\_________'-----'   '-----'_________//      \  \
+ |  /        \\  ~zzt~    \   ___   /    ~zzt~  //        \  |
+ | /          \\      /    \ /   \ /    \      //          \ |
+ |/            \\    |   .--'\/\/\/'--.   |    //            \|
+ '              \\    \   \ /\/\/\/\ /   /    //              '
+                 \\    '-._'-.___.-'_.-'    //
+                  \\___.-'   '-...-'   '-.___//
+                       ===[ >-o-< ]===
+                    /  |               |  \
+                  .'  /|   /\      /\   |\  '.
+                 /  .' |  (  )    (  )  | '.  \
+               _/  /   |   ~~      ~~   |   \  \_
+              (__)/    '=======[]======='    \(__)
+                  \      / /      \ \      /
+                   \____/ /        \ \____/
+                    (_o_)/          \(_o_)
+
+   ██████╗ ██████╗ ███████╗███╗   ███╗██╗      ██████╗ ██████╗ ██████╗
+  ██╔════╝ ██╔══██╗██╔════╝████╗ ████║██║     ██╔═══██╗██╔══██╗██╔══██╗
+  ██║  ███╗██████╔╝█████╗  ██╔████╔██║██║     ██║   ██║██████╔╝██║  ██║
+  ██║   ██║██╔══██╗██╔══╝  ██║╚██╔╝██║██║     ██║   ██║██╔══██╗██║  ██║
+  ╚██████╔╝██║  ██║███████╗██║ ╚═╝ ██║███████╗╚██████╔╝██║  ██║██████╔╝
+   ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═════╝
+
+          it's smart. it's in the wires. it's already in prod.
+       gremlins break things. this one files the expense report.
+             your tokens now answer to a higher authority.
+```
+
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/gremlord/gremlord)](https://github.com/gremlord/gremlord/stargazers)
 [![Last commit](https://img.shields.io/github/last-commit/gremlord/gremlord)](https://github.com/gremlord/gremlord/commits/main)
@@ -11,9 +50,6 @@ Formerly agentic — same tool, new name. Your existing config and cost history 
 carried over from `~/.agentic` the first time you run it.
 
 ![gremlord demo](assets/hero.gif)
-
-<!-- TODO: hero.gif still shows the old `agentic` command name and the old
-     statusline. Re-record with `assets/hero.tape` (the tape itself is updated). -->
 
 gremlord wraps Claude Code in a thin local router. Your sessions look and feel exactly like `claude` — same TUI, same tools, same updates — but the model behind them can be Anthropic, OpenAI, xAI, or anything OpenAI-compatible (Ollama, vLLM, OpenRouter, DeepSeek, Groq). Whole tasks can also be delegated to a locally logged-in Codex or Grok CLI under your own subscription. Every routed API token is metered, priced, and checked against budgets you set.
 

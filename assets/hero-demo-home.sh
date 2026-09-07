@@ -88,7 +88,13 @@ chmod 600 "$DEMO/.gremlord/config.yaml" "$DEMO/.gremlord/env" "$DEMO/.gremlord/t
 # Claude Code keeps its real config, so the splash is a normal install — but
 # with MCP servers dropped, since an unauthenticated one paints a warning across
 # the hero frame that has nothing to do with gremlord.
-ln -sfn "$REAL_HOME/.claude" "$DEMO/.claude"
+# Per-entry symlinks rather than one symlink to ~/.claude, so settings.json can
+# be overridden below without touching the real file.
+mkdir -p "$DEMO/.claude"
+for entry in "$REAL_HOME/.claude/"* "$REAL_HOME/.claude/".[!.]*; do
+    [ -e "$entry" ] || continue
+    ln -sfn "$entry" "$DEMO/.claude/$(basename "$entry")"
+done
 if [ -e "$REAL_HOME/.claude.json" ]; then
     python3 - "$REAL_HOME/.claude.json" "$DEMO/.claude.json" <<'PYEOF'
 import json, sys
@@ -140,5 +146,28 @@ VALUES
   ($((NOW-1800)), 'demo-b', 'main',  'anthropic', 'claude-haiku-4-5',  'haiku',  106000, 14000, 210000,  8000, 0.207,  1, 200),
   ($((NOW-900)),  'demo-c', 'cheap', 'local',     'qwen3-coder:30b',   'qwen',   520000, 28000,      0,     0, 0.0,    1, 200);
 SQL
+
+# Stage the binary so the recording needs nothing on the real PATH. The tape
+# prepends $HOME/bin, so `gremlord` in frame is this build.
+mkdir -p "$DEMO/bin"
+if [ -x "./gremlord" ]; then
+    cp ./gremlord "$DEMO/bin/gremlord"
+elif command -v gremlord >/dev/null 2>&1; then
+    cp "$(command -v gremlord)" "$DEMO/bin/gremlord"
+else
+    echo "no gremlord binary found: run \`make build\` first" >&2
+    exit 1
+fi
+
+rm -f "$DEMO/.claude/settings.json"
+python3 - "$REAL_HOME/.claude/settings.json" "$DEMO/.claude/settings.json" "$DEMO/bin/gremlord" <<'PYEOF'
+import json, sys
+src, dst, binpath = sys.argv[1:4]
+with open(src) as f:
+    d = json.load(f)
+d["statusLine"] = {"type": "command", "command": binpath + " statusline"}
+with open(dst, "w") as f:
+    json.dump(d, f, indent=2)
+PYEOF
 
 echo "$DEMO"
