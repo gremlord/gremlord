@@ -24,6 +24,14 @@ const (
 	CLIDialectCodex = "codex" // OpenAI Codex CLI: `codex exec`
 	CLIDialectGrok  = "grok"  // xAI Grok Build CLI: `grok -p`
 
+	// OpenAI-dialect API flavors. chat_completions is the default and
+	// what every OpenAI-compatible upstream (xAI, vLLM, Ollama, …) speaks.
+	// responses is OpenAI's /v1/responses — required for models that
+	// reject function tools combined with reasoning_effort on
+	// /v1/chat/completions (gpt-6-astra and similar).
+	APIChatCompletions = "chat_completions"
+	APIResponses       = "responses"
+
 	DefaultPort = 41100
 )
 
@@ -115,8 +123,14 @@ type Provider struct {
 	APIKeyEnv string `yaml:"api_key_env"`
 	APIKey    string `yaml:"api_key"`
 	// MaxTokensParam is the OpenAI-dialect parameter name for the output
-	// limit: "max_tokens" (default) or "max_completion_tokens".
+	// limit: "max_tokens" (default) or "max_completion_tokens". Ignored
+	// when the resolved API flavor is responses (which uses
+	// max_output_tokens).
 	MaxTokensParam string `yaml:"max_tokens_param"`
+	// API selects the OpenAI-dialect wire format: chat_completions
+	// (default) or responses. openai providers only; a model's api
+	// overrides the provider's.
+	API string `yaml:"api"`
 	// MaxRequestBytes is the upstream's request body size cap (e.g. an nginx
 	// client_max_body_size). A request larger than this is refused before
 	// dispatch with a clean 400 instead of a mangled upstream 413 retry loop.
@@ -173,8 +187,14 @@ type Model struct {
 	// GPT-5-class models to accept function tools on
 	// /v1/chat/completions), "effort" (map budget_tokens to
 	// reasoning_effort, sampling dropped), "passive" (model always
-	// reasons; parse reasoning_content, sampling kept).
+	// reasons; parse reasoning_content, sampling kept). On the
+	// responses flavor, effort+tools is valid — that combination is
+	// why the flavor exists.
 	Reasoning string `yaml:"reasoning"`
+	// API overrides the provider's OpenAI-dialect wire format for this
+	// model: chat_completions or responses. Empty inherits the provider
+	// (itself defaulting to chat_completions). openai-backed models only.
+	API string `yaml:"api"`
 	// MaxOutput clamps requested max_tokens to the model's output cap
 	// (Claude Code asks for 32K+; many models cap lower).
 	MaxOutput int    `yaml:"max_output"`
@@ -322,6 +342,17 @@ func (c *Config) Validate() error {
 			if p.Dialect != "" || p.Command != "" || p.Sandbox != "" || p.TimeoutMS != 0 {
 				return fmt.Errorf("config: provider %q: dialect/command/sandbox/timeout_ms only apply to cli providers — remove them", name)
 			}
+			if p.Type == ProviderAnthropic && p.API != "" {
+				return fmt.Errorf("config: provider %q: api only applies to openai providers — remove it", name)
+			}
+			if p.Type == ProviderOpenAI {
+				switch p.API {
+				case "", APIChatCompletions, APIResponses:
+				default:
+					return fmt.Errorf("config: provider %q has unknown api %q (want %q or %q)",
+						name, p.API, APIChatCompletions, APIResponses)
+				}
+			}
 		case ProviderCLI:
 			switch p.Dialect {
 			case CLIDialectCodex, CLIDialectGrok:
@@ -331,8 +362,8 @@ func (c *Config) Validate() error {
 			}
 			// A cli provider has no HTTP upstream; these would be silently
 			// ignored, which is the failure mode this switch guards against.
-			if p.BaseURL != "" || p.APIKey != "" || p.APIKeyEnv != "" || p.MaxTokensParam != "" || p.MaxRequestBytes != 0 {
-				return fmt.Errorf("config: provider %q: base_url/api_key/api_key_env/max_tokens_param/max_request_bytes have no effect on cli providers — remove them", name)
+			if p.BaseURL != "" || p.APIKey != "" || p.APIKeyEnv != "" || p.MaxTokensParam != "" || p.MaxRequestBytes != 0 || p.API != "" {
+				return fmt.Errorf("config: provider %q: base_url/api_key/api_key_env/max_tokens_param/max_request_bytes/api have no effect on cli providers — remove them", name)
 			}
 			if p.Sandbox != "" {
 				if p.Dialect != CLIDialectCodex {
@@ -363,8 +394,8 @@ func (c *Config) Validate() error {
 			// A delegated CLI run is a whole agent loop, not a completion —
 			// none of the HTTP/completion knobs apply. ID stays optional and,
 			// when set, is passed as the CLI's model-selection flag.
-			if m.Reasoning != "" || m.MaxOutput != 0 || m.Pricing != nil || m.ContextWindow != 0 || m.EffectiveContext != 0 {
-				return fmt.Errorf("config: model %q: reasoning/max_output/pricing/context_window/effective_context have no effect on cli providers — remove them", alias)
+			if m.Reasoning != "" || m.MaxOutput != 0 || m.Pricing != nil || m.ContextWindow != 0 || m.EffectiveContext != 0 || m.API != "" {
+				return fmt.Errorf("config: model %q: reasoning/max_output/pricing/context_window/effective_context/api have no effect on cli providers — remove them", alias)
 			}
 			continue
 		}
@@ -375,6 +406,17 @@ func (c *Config) Validate() error {
 		case "", "none", "effort", "passive":
 		default:
 			return fmt.Errorf("config: model %q has unknown reasoning %q", alias, m.Reasoning)
+		}
+		if m.API != "" {
+			if c.Providers[m.Provider].Type != ProviderOpenAI {
+				return fmt.Errorf("config: model %q: api only applies to openai providers — remove it", alias)
+			}
+			switch m.API {
+			case APIChatCompletions, APIResponses:
+			default:
+				return fmt.Errorf("config: model %q has unknown api %q (want %q or %q)",
+					alias, m.API, APIChatCompletions, APIResponses)
+			}
 		}
 		if m.ContextWindow < 0 || m.EffectiveContext < 0 {
 			return fmt.Errorf("config: model %q has negative context size", alias)
@@ -496,6 +538,19 @@ type Resolved struct {
 	ProviderName string
 	Provider     Provider
 	Model        Model
+}
+
+// APIFlavor is the OpenAI-dialect wire format for this route: the model's
+// api, else the provider's, else chat_completions. Non-openai routes never
+// consult it.
+func (r Resolved) APIFlavor() string {
+	if r.Model.API != "" {
+		return r.Model.API
+	}
+	if r.Provider.API != "" {
+		return r.Provider.API
+	}
+	return APIChatCompletions
 }
 
 // Resolve maps a model id from a request to a provider + upstream model.

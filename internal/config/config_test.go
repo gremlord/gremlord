@@ -273,3 +273,70 @@ models:
 		t.Errorf("ContextBudget() = %d, want 60000", got)
 	}
 }
+
+func TestAPIFlavorResolution(t *testing.T) {
+	cfg, err := Parse([]byte(`
+providers:
+  openai: {type: openai, base_url: https://api.openai.com/v1, api_key_env: OPENAI_API_KEY}
+  xai: {type: openai, base_url: https://api.x.ai/v1, api_key_env: XAI_API_KEY, api: responses}
+models:
+  astra: {provider: openai, id: gpt-6-astra, reasoning: effort, api: responses}
+  sol: {provider: openai, id: gpt-5.6-sol, reasoning: none}
+  grok: {provider: xai, id: grok-4.6}
+`))
+	if err != nil {
+		t.Fatalf("valid config rejected: %v", err)
+	}
+	r, _ := cfg.Resolve("astra")
+	if r.APIFlavor() != APIResponses {
+		t.Errorf("astra flavor = %q, want responses", r.APIFlavor())
+	}
+	r, _ = cfg.Resolve("sol")
+	if r.APIFlavor() != APIChatCompletions {
+		t.Errorf("sol flavor = %q, want chat_completions", r.APIFlavor())
+	}
+	r, _ = cfg.Resolve("grok")
+	if r.APIFlavor() != APIResponses {
+		t.Errorf("grok inherits provider api = %q, want responses", r.APIFlavor())
+	}
+}
+
+func TestAPIFlavorValidation(t *testing.T) {
+	cases := map[string]string{
+		"unknown provider api": `
+providers:
+  openai: {type: openai, base_url: https://api.openai.com/v1, api: chat}
+models:
+  m: {provider: openai, id: gpt}
+`,
+		"unknown model api": `
+providers:
+  openai: {type: openai, base_url: https://api.openai.com/v1}
+models:
+  m: {provider: openai, id: gpt, api: chat}
+`,
+		"api on anthropic provider": `
+providers:
+  anthropic: {type: anthropic, base_url: https://api.anthropic.com, api: responses}
+models:
+  m: {provider: anthropic, id: claude-opus-5}
+`,
+		"api on anthropic model": `
+providers:
+  anthropic: {type: anthropic, base_url: https://api.anthropic.com}
+models:
+  m: {provider: anthropic, id: claude-opus-5, api: responses}
+`,
+		"api on cli provider": `
+providers:
+  p: {type: cli, dialect: codex, api: responses}
+models:
+  m: {provider: p}
+`,
+	}
+	for name, yaml := range cases {
+		if _, err := Parse([]byte(yaml)); err == nil {
+			t.Errorf("%s: expected validation error", name)
+		}
+	}
+}

@@ -23,24 +23,26 @@ type streamState struct {
 	sse   *anthropic.SSEWriter
 	alias string
 
-	started      bool
-	sawChunk     bool   // a real upstream chunk arrived (vs synthetic keep-alive start)
-	index        int    // next content block index
-	openType     string // "", "thinking", "text", "tool"
-	openaiToolIx int    // openai tool_call index of the open tool block
-	openToolID   string // openai tool_call id of the open tool block
-	pendingArgs  string // tool args buffered before the block could open
-	pendingID    string
-	pendingName  string
-	havePending  bool
+	started         bool
+	sawChunk        bool   // a real upstream chunk arrived (vs synthetic keep-alive start)
+	index           int    // next content block index
+	openType        string // "", "thinking", "text", "tool"
+	openaiToolIx    int    // openai tool_call index of the open tool block
+	openToolID      string // openai tool_call id of the open tool block
+	pendingArgs     string // tool args buffered before the block could open
+	pendingID       string
+	pendingName     string
+	havePending     bool
+	holdPendingTool bool // Responses: buffer function_call until output_item.done
 
-	finishReason   string
-	sawToolCall    bool
-	usage          anthropic.Usage // true upstream usage; scaled only at emit time
-	scale          float64         // context-scaling factor for client-facing usage
-	estInput       int64           // scaled input estimate for message_start (see startMessage)
-	keepAliveEvery time.Duration   // ping cadence while the upstream is quiet
-	idleTimeout    time.Duration   // give up if the upstream sends nothing at all for this long
+	finishReason     string
+	directStopReason string
+	sawToolCall      bool
+	usage            anthropic.Usage // true upstream usage; scaled only at emit time
+	scale            float64         // context-scaling factor for client-facing usage
+	estInput         int64           // scaled input estimate for message_start (see startMessage)
+	keepAliveEvery   time.Duration   // ping cadence while the upstream is quiet
+	idleTimeout      time.Duration   // give up if the upstream sends nothing at all for this long
 }
 
 // maxIdleStream is how long Run waits for upstream activity — a scanner
@@ -57,13 +59,35 @@ func newStreamState(sse *anthropic.SSEWriter, alias string) *streamState {
 		keepAliveEvery: 15 * time.Second, idleTimeout: maxIdleStream}
 }
 
-// Run consumes the upstream SSE body until EOF, [DONE], ctx cancellation, or
-// idleTimeout of silence — returning final usage. A mid-stream upstream
-// error is forwarded as an Anthropic error event (Claude Code retries on
-// it). While the upstream is quiet — slow reasoning models can sit for a
-// minute before the first token — pings keep the client from timing out on
-// a byte-silent connection.
+// Run consumes a Chat Completions SSE body until EOF, [DONE], ctx
+// cancellation, or idleTimeout of silence — returning final usage. A
+// mid-stream upstream error is forwarded as an Anthropic error event
+// (Claude Code retries on it). While the upstream is quiet — slow
+// reasoning models can sit for a minute before the first token — pings
+// keep the client from timing out on a byte-silent connection.
 func (s *streamState) Run(ctx context.Context, body io.Reader) (anthropic.Usage, string) {
+	return s.runSSE(ctx, body, s.handleChatLine)
+}
+
+func (s *streamState) handleChatLine(data []byte) (done bool, errType string) {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("[DONE]")) {
+		return true, s.finalize()
+	}
+	var chunk openai.Chunk
+	if err := json.Unmarshal(data, &chunk); err != nil {
+		return false, "" // tolerate provider noise between data lines
+	}
+	if chunk.Error != nil {
+		s.sse.ErrorEvent("api_error", "upstream: "+chunk.Error.Message)
+		return true, "api_error"
+	}
+	s.handleChunk(&chunk)
+	return false, ""
+}
+
+// runSSE is the shared idle/keepalive/cancel loop. handle is called with
+// each `data: ` payload; returning done=true ends the stream with errType.
+func (s *streamState) runSSE(ctx context.Context, body io.Reader, handle func([]byte) (bool, string)) (anthropic.Usage, string) {
 	lines := make(chan []byte)
 	scanErr := make(chan error, 1)
 	quit := make(chan struct{}) // frees the reader if Run returns before EOF
@@ -120,18 +144,9 @@ func (s *streamState) Run(ctx context.Context, body io.Reader) (anthropic.Usage,
 			if !ok {
 				continue
 			}
-			if bytes.Equal(bytes.TrimSpace(data), []byte("[DONE]")) {
-				return s.usage, s.finalize()
+			if done, errType := handle(data); done {
+				return s.usage, errType
 			}
-			var chunk openai.Chunk
-			if err := json.Unmarshal(data, &chunk); err != nil {
-				continue // tolerate provider noise between data lines
-			}
-			if chunk.Error != nil {
-				s.sse.ErrorEvent("api_error", "upstream: "+chunk.Error.Message)
-				return s.usage, "api_error"
-			}
-			s.handleChunk(&chunk)
 		}
 	}
 }
@@ -304,7 +319,7 @@ func (s *streamState) ensureBlock(kind string) {
 }
 
 func (s *streamState) closeBlock() {
-	if s.havePending {
+	if s.havePending && !s.holdPendingTool {
 		// Tool block that never got a name — open it with a placeholder so
 		// buffered args aren't lost.
 		if s.pendingName == "" {
@@ -341,9 +356,13 @@ func (s *streamState) finalize() string {
 	}
 	s.closeBlock()
 	reported := tokens.ScaleUsage(s.usage, s.scale)
+	stopReason := s.directStopReason
+	if stopReason == "" {
+		stopReason = mapFinishReason(s.finishReason, s.sawToolCall)
+	}
 	s.sse.Event("message_delta", map[string]any{
 		"type":  "message_delta",
-		"delta": map[string]any{"stop_reason": mapFinishReason(s.finishReason, s.sawToolCall), "stop_sequence": nil},
+		"delta": map[string]any{"stop_reason": stopReason, "stop_sequence": nil},
 		"usage": map[string]int64{
 			"input_tokens":            reported.InputTokens,
 			"output_tokens":           reported.OutputTokens,

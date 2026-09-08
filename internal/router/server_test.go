@@ -119,6 +119,73 @@ func TestOpenAIStreamThroughRouter(t *testing.T) {
 	}
 }
 
+func TestOpenAIResponsesStreamThroughRouter(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/responses" {
+			t.Errorf("upstream path = %s", r.URL.Path)
+		}
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), `"model":"fake-upstream-1"`) {
+			t.Errorf("alias not resolved upstream: %s", body)
+		}
+		if !strings.Contains(string(body), `"store":false`) {
+			t.Error("store:false missing")
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, `data: {"type":"response.created","response":{"id":"resp_x"}}`+"\n\n")
+		fmt.Fprint(w, `data: {"type":"response.output_item.added","item":{"type":"message"}}`+"\n\n")
+		fmt.Fprint(w, `data: {"type":"response.output_text.delta","delta":"hi"}`+"\n\n")
+		fmt.Fprint(w, `data: {"type":"response.completed","response":{"id":"resp_x","status":"completed","usage":{"input_tokens":11,"output_tokens":3}}}`+"\n\n")
+	}))
+	defer upstream.Close()
+
+	dir := t.TempDir()
+	cfg := &config.Config{
+		Router: config.Router{Port: 0},
+		Providers: map[string]config.Provider{
+			"fake": {Type: config.ProviderOpenAI, BaseURL: upstream.URL},
+		},
+		Models: map[string]config.Model{
+			"fake-model": {Provider: "fake", ID: "fake-upstream-1", API: config.APIResponses},
+		},
+		Profiles: map[string]config.Profile{
+			"main": {Model: "fake-model"},
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(filepath.Join(dir, "agentic.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	srv := NewServer(cfg, testToken, dir, st, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	resp, body := post(t, ts.URL+"/v1/messages", testToken,
+		`{"model":"fake-model","max_tokens":50,"stream":true,"messages":[{"role":"user","content":"hello"}]}`)
+	if resp.StatusCode != 200 {
+		t.Fatalf("status %d: %s", resp.StatusCode, body)
+	}
+	for _, want := range []string{
+		"event: message_start", "event: content_block_start",
+		`"text":"hi"`, `"text_delta"`, `"stop_reason":"end_turn"`, "event: message_stop",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("SSE missing %q in:\n%s", want, body)
+		}
+	}
+	rows, err := st.SpendSince(time.Now().Add(-time.Minute), "session")
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("rows=%v err=%v", rows, err)
+	}
+	if rows[0].InputTokens != 11 || rows[0].OutputTokens != 3 {
+		t.Errorf("usage row: %+v", rows[0])
+	}
+}
+
 func TestCLIProviderDispatchesThroughRouter(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{

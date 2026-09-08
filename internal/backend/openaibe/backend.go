@@ -11,6 +11,7 @@ import (
 
 	"github.com/gremlord/gremlord/internal/anthropic"
 	"github.com/gremlord/gremlord/internal/backend"
+	"github.com/gremlord/gremlord/internal/config"
 	"github.com/gremlord/gremlord/internal/openai"
 	"github.com/gremlord/gremlord/internal/tokens"
 )
@@ -29,18 +30,37 @@ func (b *Backend) Messages(ctx context.Context, call *backend.Call, w http.Respo
 		anthropic.WriteError(w, 400, "invalid_request_error", "gremlord: "+err.Error())
 		return backend.Result{Status: 400, ErrType: "invalid_request_error"}
 	}
-	chatReq, err := TranslateRequest(req, call.Route)
-	if err != nil {
-		anthropic.WriteError(w, 400, "invalid_request_error", "gremlord translate: "+err.Error())
-		return backend.Result{Status: 400, ErrType: "invalid_request_error"}
-	}
-	body, err := json.Marshal(chatReq)
-	if err != nil {
-		anthropic.WriteError(w, 500, "api_error", "gremlord: "+err.Error())
-		return backend.Result{Status: 500, ErrType: "api_error"}
+	responses := call.Route.APIFlavor() == config.APIResponses
+	var body []byte
+	if responses {
+		rr, err := TranslateResponsesRequest(req, call.Route)
+		if err != nil {
+			anthropic.WriteError(w, 400, "invalid_request_error", "gremlord translate: "+err.Error())
+			return backend.Result{Status: 400, ErrType: "invalid_request_error"}
+		}
+		body, err = json.Marshal(rr)
+		if err != nil {
+			anthropic.WriteError(w, 500, "api_error", "gremlord: "+err.Error())
+			return backend.Result{Status: 500, ErrType: "api_error"}
+		}
+	} else {
+		chatReq, err := TranslateRequest(req, call.Route)
+		if err != nil {
+			anthropic.WriteError(w, 400, "invalid_request_error", "gremlord translate: "+err.Error())
+			return backend.Result{Status: 400, ErrType: "invalid_request_error"}
+		}
+		body, err = json.Marshal(chatReq)
+		if err != nil {
+			anthropic.WriteError(w, 500, "api_error", "gremlord: "+err.Error())
+			return backend.Result{Status: 500, ErrType: "api_error"}
+		}
 	}
 
-	u := strings.TrimSuffix(call.Route.Provider.BaseURL, "/") + "/chat/completions"
+	path := "/chat/completions"
+	if responses {
+		path = "/responses"
+	}
+	u := strings.TrimSuffix(call.Route.Provider.BaseURL, "/") + path
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
 	if err != nil {
 		anthropic.WriteError(w, 500, "api_error", "gremlord: "+err.Error())
@@ -73,10 +93,19 @@ func (b *Backend) Messages(ctx context.Context, call *backend.Call, w http.Respo
 		state := newStreamState(sse, call.Envelope.Model)
 		state.scale = scale
 		state.estInput = tokens.ScaleCount(call.EstimateInput(req), scale)
-		usage, errType := state.Run(ctx, resp.Body)
+		var usage anthropic.Usage
+		var errType string
+		if responses {
+			usage, errType = state.RunResponses(ctx, resp.Body)
+		} else {
+			usage, errType = state.Run(ctx, resp.Body)
+		}
 		status := 200
-		if errType == "client_disconnect" {
+		switch errType {
+		case "client_disconnect":
 			status = 499
+		case "api_error":
+			status = 502
 		}
 		return backend.Result{Status: status, Usage: usage, ErrType: errType,
 			ReportedInput: tokens.ScaleUsage(usage, scale).InputSide()}
@@ -88,13 +117,24 @@ func (b *Backend) Messages(ctx context.Context, call *backend.Call, w http.Respo
 		anthropic.WriteError(w, 500, "api_error", msg)
 		return backend.Result{Status: 502, ErrType: "api_error", ErrMsg: msg}
 	}
-	var parsed openai.ChatResponse
-	if err := json.Unmarshal(raw, &parsed); err != nil {
-		msg := "gremlord: upstream body unparseable: " + err.Error()
-		anthropic.WriteError(w, 500, "api_error", msg)
-		return backend.Result{Status: 502, ErrType: "api_error", ErrMsg: msg}
+	var out *anthropic.MessagesResponse
+	if responses {
+		var parsed openai.ResponsesResponse
+		if err := json.Unmarshal(raw, &parsed); err != nil {
+			msg := "gremlord: upstream body unparseable: " + err.Error()
+			anthropic.WriteError(w, 500, "api_error", msg)
+			return backend.Result{Status: 502, ErrType: "api_error", ErrMsg: msg}
+		}
+		out, err = TranslateResponsesResponse(&parsed, call.Envelope.Model)
+	} else {
+		var parsed openai.ChatResponse
+		if err := json.Unmarshal(raw, &parsed); err != nil {
+			msg := "gremlord: upstream body unparseable: " + err.Error()
+			anthropic.WriteError(w, 500, "api_error", msg)
+			return backend.Result{Status: 502, ErrType: "api_error", ErrMsg: msg}
+		}
+		out, err = TranslateResponse(&parsed, call.Envelope.Model)
 	}
-	out, err := TranslateResponse(&parsed, call.Envelope.Model)
 	if err != nil {
 		msg := "gremlord translate: " + err.Error()
 		anthropic.WriteError(w, 500, "api_error", msg)
