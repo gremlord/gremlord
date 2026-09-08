@@ -104,6 +104,7 @@ providers:
   #   base_url: https://api.openai.com/v1
   #   api_key_env: OPENAI_API_KEY
   #   max_tokens_param: max_completion_tokens
+  #   api: chat_completions              # or responses (per-model override: models.*.api)
   # xai:
   #   type: openai
   #   base_url: https://api.x.ai/v1

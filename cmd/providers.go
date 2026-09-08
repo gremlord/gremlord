@@ -21,6 +21,7 @@ var (
 	provCommand string
 	provSandbox string
 	provTimeout int
+	provAPI     string
 )
 
 var providersCmd = &cobra.Command{
@@ -121,6 +122,9 @@ CLI running under your own subscription login (codex login / grok login):
 		if provMaxReq > 0 {
 			snippet += fmt.Sprintf("max_request_bytes: %d\n", provMaxReq)
 		}
+		if provAPI != "" {
+			snippet += fmt.Sprintf("api: %s\n", provAPI)
+		}
 		return editConfig(func(doc *config.Doc) error {
 			return doc.SetSubtree("providers", args[0], snippet)
 		}, "provider "+args[0])
@@ -148,5 +152,6 @@ func init() {
 	providersAddCmd.Flags().StringVar(&provCommand, "command", "", "cli providers: binary name or path (default: the dialect name)")
 	providersAddCmd.Flags().StringVar(&provSandbox, "sandbox", "", "cli providers (codex only): read-only | workspace-write | danger-full-access")
 	providersAddCmd.Flags().IntVar(&provTimeout, "timeout-ms", 0, "cli providers: per-delegation deadline (0 = 20m default)")
+	providersAddCmd.Flags().StringVar(&provAPI, "api", "", "openai providers: chat_completions (default) | responses")
 	providersCmd.AddCommand(providersListCmd, providersAddCmd, providersRemoveCmd)
 }

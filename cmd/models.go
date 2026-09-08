@@ -77,6 +77,7 @@ var (
 	modelMaxOutput int
 	modelCtxWindow int
 	modelEffective int
+	modelAPI       string
 )
 
 var modelsAddCmd = &cobra.Command{
@@ -117,6 +118,9 @@ var modelsAddCmd = &cobra.Command{
 		}
 		if modelEffective > 0 {
 			snippet += fmt.Sprintf("effective_context: %d\n", modelEffective)
+		}
+		if modelAPI != "" {
+			snippet += fmt.Sprintf("api: %s\n", modelAPI)
 		}
 		return editConfig(func(doc *config.Doc) error {
 			return doc.SetSubtree("models", args[0], snippet)
@@ -196,7 +200,7 @@ var modelsTestCmd = &cobra.Command{
 }
 
 func probeModel(baseURL, token, alias string, timeout time.Duration) error {
-	body := fmt.Sprintf(`{"model":%q,"max_tokens":1,"messages":[{"role":"user","content":"hi"}]}`, alias)
+	body := fmt.Sprintf(`{"model":%q,"max_tokens":128,"messages":[{"role":"user","content":"hi"}]}`, alias)
 	req, err := http.NewRequest(http.MethodPost, baseURL+"/v1/messages", strings.NewReader(body))
 	if err != nil {
 		return err
@@ -314,5 +318,6 @@ func init() {
 	modelsAddCmd.Flags().IntVar(&modelMaxOutput, "max-output", 0, "clamp max_tokens to this output cap")
 	modelsAddCmd.Flags().IntVar(&modelCtxWindow, "context-window", 0, "model's real input context window in tokens")
 	modelsAddCmd.Flags().IntVar(&modelEffective, "effective-context", 0, "usable context before quality degrades (attention budget)")
+	modelsAddCmd.Flags().StringVar(&modelAPI, "api", "", "openai models: chat_completions | responses (overrides the provider)")
 	modelsCmd.AddCommand(modelsListCmd, modelsAddCmd, modelsRemoveCmd, modelsTestCmd, modelsUpdatePricesCmd)
 }

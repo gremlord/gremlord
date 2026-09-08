@@ -1,5 +1,7 @@
-// Package openaibe translates the Anthropic Messages API to the OpenAI
-// Chat Completions dialect (OpenAI, xAI, Ollama, vLLM, OpenRouter, …).
+// Package openaibe translates the Anthropic Messages API to OpenAI-dialect
+// upstreams. Chat Completions is the default (OpenAI, xAI, Ollama, vLLM,
+// OpenRouter, …); the Responses flavor (/v1/responses) is opt-in per
+// provider or model via config api: responses.
 package openaibe
 
 import (
