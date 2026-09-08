@@ -309,7 +309,9 @@ Three more things keep a session from spending window on nothing:
 
 ## Model evaluations
 
-`gremlord eval` compares a baseline model with a model under test on the same coding tasks. Each arm runs non-interactive Claude Code in isolation, records router usage and route decisions under its own session ID, and produces a patch. An optional judge sees blinded patches and verifier evidence; it never sees model names, cost, or execution order.
+`gremlord eval` compares a baseline model with a model under test on the same coding tasks. Each arm runs non-interactive Claude Code with a throwaway home, no user/project settings or MCP servers, no repository `CLAUDE.md`/`AGENTS.md`, and no subagents or web tools. It records router usage and route decisions under its own session ID and captures the complete submission relative to the pre-agent commit, including untracked, staged, and committed changes. `duration_ms` covers the candidate lifecycle while `agent_ms` isolates the agent turn (they are equal for local runs; Docker provisioning is excluded from `agent_ms`).
+
+An optional judge sees blinded patches and verifier evidence; it never sees model names, cost, or execution order. The judge is a direct Messages API request through the router rather than another Claude Code run, so its result is independent of the candidate harness.
 
 There are two executor types. A local manifest supplies its repository, setup command, and verifier directly:
 
@@ -374,7 +376,7 @@ Use `--task id` to select instances, `--seed` to reproduce launch order and judg
 
 A local verifier reports its verdict through its exit code: `0` passed, `2` "I could not judge this candidate" — a missing toolchain, an image that is not present, a container that would not start — and any other non-zero means the candidate's work is wrong. Exit `2` is recorded as `verifier_error`, an infrastructure status, so the pair is unscored, hidden from the judge, and retried by `--resume`. Without that distinction a machine missing a Docker image scores as a model loss, which is worse than no measurement at all.
 
-Artifacts include raw Claude output, patches, container logs, official SWE-bench reports, FAIL_TO_PASS/PASS_TO_PASS details, blinded judge mappings, per-candidate usage and route traces, pair results, the resolved dataset metadata/fingerprint, and `summary.json`. Local setup and verifier commands execute on the host, so review third-party local manifests before running them.
+Artifacts include raw Claude output, complete patches, container logs, official SWE-bench reports, FAIL_TO_PASS/PASS_TO_PASS details, blinded judge mappings, per-candidate usage and route traces, pair results, the resolved dataset metadata/fingerprint, and `summary.json`. Local setup and verifier commands execute on the host, so review third-party local manifests before running them.
 
 The router writes `~/.gremlord/router.log`. It is capped at 8 MiB and keeps three older generations (`router.log.1` … `.3`), so the log costs at most 32 MiB on disk. An oversized log left by an earlier version is rotated on the next write rather than truncated.
 

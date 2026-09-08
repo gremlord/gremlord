@@ -107,7 +107,8 @@ type DockerContainerEnv struct {
 
 func containerEnvArgs(e DockerContainerEnv) []string {
 	return []string{
-		"HOME=/home/nonroot",
+		"HOME=/tmp/gremlord-eval-home",
+		"CLAUDE_CONFIG_DIR=/tmp/gremlord-eval-home/.claude",
 		"USER=nonroot",
 		"ANTHROPIC_BASE_URL=" + e.BaseURL,
 		"ANTHROPIC_AUTH_TOKEN=" + e.Token,
@@ -129,6 +130,10 @@ func containerEnvArgs(e DockerContainerEnv) []string {
 		"ANTHROPIC_DEFAULT_SONNET_MODEL=" + e.Model,
 		"ANTHROPIC_DEFAULT_HAIKU_MODEL=" + e.Model,
 		"CLAUDE_CODE_SUBAGENT_MODEL=" + e.Model,
+		// Same pin as local evalEnv: interactive sessions inherit
+		// ENABLE_TOOL_SEARCH=true, and comparability must not depend on
+		// where the eval was launched from.
+		"ENABLE_TOOL_SEARCH=false",
 	}
 }
 
@@ -140,6 +145,7 @@ type DockerCandidateResult struct {
 	Error      string
 	ExitCode   int
 	DurationMS int64
+	AgentMS    int64
 	Stdout     []byte
 	Stderr     []byte
 	Patch      string
@@ -209,10 +215,38 @@ func RunDockerCandidate(ctx context.Context, opts DockerOptions, instance SWEBen
 	}
 	logf("claude code installed at %s", claudePath)
 
-	argv := []string{claudePath, "--print", "--output-format", "json", "--permission-mode", "bypassPermissions", "--disallowedTools", "Task", "--model", model, prompt}
+	baseCtx, baseCancel := context.WithTimeout(ctx, opts.execTimeout())
+	baseOut, _, err := dockerExec(baseCtx, opts, nil, []string{"git", "rev-parse", "HEAD"}, &log, false, containerID)
+	baseCancel()
+	base := strings.TrimSpace(string(baseOut))
+	if err != nil || base == "" {
+		res.Status, res.Error = StatusDockerError, "record workspace base: "+fmt.Sprint(err)
+		return res
+	}
+	isolateCtx, isolateCancel := context.WithTimeout(ctx, opts.execTimeout())
+	ignoredOut, _, err := dockerExec(isolateCtx, opts, nil, []string{"bash", "-lc", `rm -rf /tmp/gremlord-eval-home && install -d -m 0700 -o nonroot -g nonroot /tmp/gremlord-eval-home && find /testbed -path /testbed/.git -prune -o -type f \( -iname CLAUDE.md -o -iname AGENTS.md \) -print -delete`}, &log, false, containerID)
+	isolateCancel()
+	if err != nil {
+		res.Status, res.Error = StatusDockerError, "isolate candidate: "+err.Error()
+		return res
+	}
+	var ignoredInstructions []string
+	for _, path := range strings.Split(string(ignoredOut), "\n") {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		if rel := strings.TrimPrefix(path, dockerWorkdir+"/"); rel != path && rel != "" {
+			ignoredInstructions = append(ignoredInstructions, rel)
+		}
+	}
+
+	argv := candidateArgs(claudePath, model, prompt)
 	env := containerEnvArgs(containerEnv)
 	turnCtx, turnCancel := context.WithTimeout(ctx, claudeTimeout)
+	agentStart := time.Now()
 	stdout, stderr, err := dockerExecUser(turnCtx, opts, env, argv, &log, false, containerID, "nonroot")
+	res.AgentMS = time.Since(agentStart).Milliseconds()
 	turnCancel()
 	res.Stdout, res.Stderr = stdout, stderr
 	res.ExitCode = dockerExitCode(err)
@@ -226,7 +260,12 @@ func RunDockerCandidate(ctx context.Context, opts DockerOptions, instance SWEBen
 	}
 
 	diffCtx, diffCancel := context.WithTimeout(ctx, opts.execTimeout())
-	patch, _, perr := dockerExec(diffCtx, opts, nil, []string{"git", "diff", "--binary", "--no-ext-diff"}, &log, false, containerID)
+	_, _, aerr := dockerExec(diffCtx, opts, nil, []string{"git", "add", "-A", "-N"}, &log, false, containerID)
+	if aerr != nil {
+		logf("git add --intent-to-add: %v", aerr)
+	}
+	diffArgs := append([]string{"git", "diff", base, "--binary", "--no-ext-diff"}, patchIgnoreArgs(ignoredInstructions)...)
+	patch, _, perr := dockerExec(diffCtx, opts, nil, diffArgs, &log, false, containerID)
 	diffCancel()
 	if perr != nil {
 		logf("git diff: %v", perr)
@@ -495,7 +534,7 @@ func (r *Runner) runSWEBenchCandidate(ctx context.Context, manifest *Manifest, t
 	run := RunDockerCandidate(ctx, r.Options.Docker, instance, task.Prompt, model, r.Options.Timeout, DockerContainerEnv{
 		BaseURL: r.relay.ContainerURL, Token: r.Options.Token, SessionID: res.SessionID, Profile: r.Options.Profile, Model: model,
 	})
-	res.Status, res.Error, res.ExitCode, res.DurationMS = run.Status, run.Error, run.ExitCode, run.DurationMS
+	res.Status, res.Error, res.ExitCode, res.DurationMS, res.AgentMS = run.Status, run.Error, run.ExitCode, run.DurationMS, run.AgentMS
 	res.FinalText = finalText(run.Stdout)
 	res.Patch = run.Patch
 	os.WriteFile(filepath.Join(dir, "claude.stdout.json"), run.Stdout, 0o644)
