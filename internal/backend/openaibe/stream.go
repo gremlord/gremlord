@@ -140,10 +140,11 @@ func (s *streamState) runSSE(ctx context.Context, body io.Reader, handle func([]
 				<-idle.C
 			}
 			idle.Reset(s.idleTimeout)
-			data, ok := bytes.CutPrefix(line, []byte("data: "))
+			data, ok := bytes.CutPrefix(line, []byte("data:"))
 			if !ok {
 				continue
 			}
+			data = bytes.TrimPrefix(data, []byte(" "))
 			if done, errType := handle(data); done {
 				return s.usage, errType
 			}

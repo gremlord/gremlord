@@ -12,6 +12,13 @@ import (
 // to the Anthropic response shape. alias is echoed as the model id so
 // Claude Code sees the name it asked for.
 func TranslateResponsesResponse(resp *openai.ResponsesResponse, alias string) (*anthropic.MessagesResponse, error) {
+	if resp.Status == "failed" {
+		msg := "response failed"
+		if resp.Error != nil && resp.Error.Message != "" {
+			msg = resp.Error.Message
+		}
+		return nil, fmt.Errorf("upstream: %s", msg)
+	}
 	if resp.Error != nil && resp.Error.Message != "" {
 		return nil, fmt.Errorf("upstream: %s", resp.Error.Message)
 	}

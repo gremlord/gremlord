@@ -342,3 +342,61 @@ func TestResponsesRefusalContent(t *testing.T) {
 		t.Errorf("content = %+v", out.Content)
 	}
 }
+
+func TestResponsesFailedWithoutErrorMessage(t *testing.T) {
+	_, err := TranslateResponsesResponse(&openai.ResponsesResponse{ID: "resp_x", Status: "failed"}, "gpt-6-astra")
+	if err == nil || !strings.Contains(err.Error(), "response failed") {
+		t.Errorf("err = %v, want failed response error", err)
+	}
+}
+
+func TestResponsesMinimumOutputTokens(t *testing.T) {
+	body := `{"model":"gpt-6-astra","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}`
+	out, err := TranslateResponsesRequest(parseReq(t, body), responsesRoute("effort"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.MaxOutputTokens != 16 {
+		t.Errorf("max_output_tokens = %d, want 16", out.MaxOutputTokens)
+	}
+}
+
+func TestResponsesDisabledThinkingOmitsReasoning(t *testing.T) {
+	body := `{"model":"gpt-6-astra","max_tokens":16,"thinking":{"type":"disabled"},"messages":[{"role":"user","content":"hi"}]}`
+	out, err := TranslateResponsesRequest(parseReq(t, body), responsesRoute("effort"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Reasoning != nil {
+		t.Errorf("reasoning = %+v, want omitted", out.Reasoning)
+	}
+}
+
+func TestResponsesStreamFlushesPendingToolOnCompleted(t *testing.T) {
+	evs := runResponsesStream(t, []string{
+		`{"type":"response.created","response":{"id":"resp_1"}}`,
+		`{"type":"response.output_item.added","item":{"type":"function_call","call_id":"call_a","name":"read_file"}}`,
+		`{"type":"response.function_call_arguments.delta","delta":"{\"path\":\"a.go\"}"}`,
+		`{"type":"response.completed","response":{"id":"resp_1","status":"completed","output":[{"type":"function_call"}],"usage":{"input_tokens":8,"output_tokens":4}}}`,
+	})
+	if !strings.Contains(names(evs), "content_block_start") {
+		t.Fatalf("pending tool was dropped: %s", names(evs))
+	}
+	last := evs[len(evs)-2]
+	if last.data["delta"].(map[string]any)["stop_reason"] != "tool_use" {
+		t.Errorf("stop_reason = %v", last.data["delta"])
+	}
+}
+
+func TestStreamAcceptsDataWithoutSpace(t *testing.T) {
+	rec := httptest.NewRecorder()
+	state := newStreamState(anthropic.NewSSEWriter(rec), "gpt")
+	body := "data:{\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"},\"finish_reason\":\"stop\"}]}\n\ndata:[DONE]\n\n"
+	_, errType := state.Run(context.Background(), strings.NewReader(body))
+	if errType != "" {
+		t.Fatalf("errType = %q", errType)
+	}
+	if !strings.Contains(rec.Body.String(), `"text":"hi"`) {
+		t.Errorf("missing text delta: %s", rec.Body.String())
+	}
+}

@@ -70,15 +70,16 @@ func TranslateResponsesRequest(req *anthropic.MessagesRequest, route config.Reso
 	if cap := route.Model.MaxOutput; cap > 0 && maxTokens > cap {
 		maxTokens = cap
 	}
+	if maxTokens > 0 && maxTokens < 16 {
+		maxTokens = 16 // OpenAI Responses minimum
+	}
 	out.MaxOutputTokens = maxTokens
 
 	switch route.Model.Reasoning {
 	case "effort":
-		effort := effortFromBudget(req.Thinking)
-		if effort == "" {
-			effort = "medium"
+		if effort := effortFromBudget(req.Thinking); effort != "" {
+			out.Reasoning = &openai.ResponsesReasoning{Effort: effort, Summary: "auto"}
 		}
-		out.Reasoning = &openai.ResponsesReasoning{Effort: effort, Summary: "auto"}
 	case "none":
 		out.Reasoning = &openai.ResponsesReasoning{Effort: "none"}
 		out.Temperature = req.Temperature

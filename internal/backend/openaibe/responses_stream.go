@@ -123,6 +123,14 @@ func (s *streamState) handleResponsesLine(data []byte) (done bool, errType strin
 		s.holdPendingTool = false
 	case "response.completed", "response.incomplete":
 		s.sawChunk = true
+		if s.havePending {
+			s.holdPendingTool = false
+			if s.pendingName == "" {
+				s.pendingName = "unknown_tool"
+			}
+			s.openToolBlock()
+			s.closeBlock()
+		}
 		id := "gremlord"
 		if ev.Response != nil && ev.Response.ID != "" {
 			id = ev.Response.ID
