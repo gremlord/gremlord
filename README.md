@@ -309,7 +309,7 @@ Three more things keep a session from spending window on nothing:
 
 ## Model evaluations
 
-`gremlord eval` compares a baseline model with a model under test on the same coding tasks. Each arm runs non-interactive Claude Code with a throwaway home, no user/project settings or MCP servers, no repository `CLAUDE.md`/`AGENTS.md`, and no subagents or web tools. It records router usage and route decisions under its own session ID and captures the complete submission relative to the pre-agent commit, including untracked, staged, and committed changes. `duration_ms` covers the candidate lifecycle while `agent_ms` isolates the agent turn (they are equal for local runs; Docker provisioning is excluded from `agent_ms`).
+`gremlord eval` compares a baseline model with a model under test on the same coding tasks. Each arm runs non-interactive Claude Code with a throwaway home, no user/project settings or MCP servers, no repository `CLAUDE.md`/`CLAUDE.local.md`/`AGENTS.md`/`AGENTS.override.md`, and no subagents or web tools. It records router usage and route decisions under its own session ID and captures the complete submission relative to the pre-agent commit, including untracked, staged, and committed changes. `duration_ms` covers the candidate lifecycle while `agent_ms` isolates the agent turn (they are equal for local runs; Docker provisioning is excluded from `agent_ms`).
 
 An optional judge sees blinded patches and verifier evidence; it never sees model names, cost, or execution order. The judge is a direct Messages API request through the router rather than another Claude Code run, so its result is independent of the candidate harness.
 

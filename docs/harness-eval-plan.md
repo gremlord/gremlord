@@ -1,6 +1,6 @@
 # Plan: evaluating Codex vs Claude Code as the base harness
 
-Status: proposal, 2026-09-08. Phase 0 implemented (uncommitted) 2026-09-08; Phases 1–5 not started.
+Status: proposal, 2026-09-08. Phase 0 implemented 2026-09-08; Phases 1–5 not started.
 
 ## The question
 

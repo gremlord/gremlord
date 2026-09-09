@@ -31,6 +31,10 @@ import (
 
 const SchemaVersion = 1
 
+// judgeMaxTokens is large enough for a blinded JSON verdict with a
+// reasoned comparison. Truncation is treated as a missing measurement.
+const judgeMaxTokens = 4096
+
 // Candidate outcome states. Only StatusComplete means the model actually
 // finished its turn; the others separate model failure (timeout, non-zero
 // exit) from harness/infrastructure failure (workspace, setup, Docker
@@ -485,6 +489,7 @@ func (r *Runner) Run(ctx context.Context, manifest *Manifest) (*Summary, error) 
 				return nil, err
 			}
 			if old.Baseline != r.Options.Baseline || old.MUT != r.Options.MUT || old.Seed != r.Options.Seed ||
+				old.Judge != r.Options.Judge ||
 				old.DatasetFingerprint != s.DatasetFingerprint || old.SWEBenchVersion != s.SWEBenchVersion {
 				return nil, fmt.Errorf("resume options or benchmark environment do not match existing run")
 			}
@@ -624,8 +629,17 @@ func (r *Runner) runCandidate(ctx context.Context, manifest *Manifest, task Task
 		res.Verifier.Skipped = "setup failed"
 		return res, nil
 	}
-	base := strings.TrimSpace(gitOutput(ctx, workspace, "rev-parse", "HEAD"))
-	if base == "" {
+	// Setup is harness work. Commit it before recording the patch base so
+	// uncommitted setup edits are not attributed to the candidate, and so
+	// committed setup is part of the base the patch applies to.
+	if err := commitHarnessChanges(ctx, workspace, "gremlord eval setup"); err != nil {
+		res.Status, res.Error = StatusSetupError, "commit setup: "+err.Error()
+		res.Verifier.Skipped = "setup commit failed"
+		return res, nil
+	}
+	base, err := gitOutput(ctx, workspace, "rev-parse", "HEAD")
+	base = strings.TrimSpace(base)
+	if err != nil || base == "" {
 		res.Status, res.Error = StatusWorkspaceError, "workspace has no base commit"
 		res.Verifier.Skipped = "workspace base could not be recorded"
 		return res, nil
@@ -662,10 +676,20 @@ func (r *Runner) runCandidate(ctx context.Context, manifest *Manifest, task Task
 	os.WriteFile(filepath.Join(dir, "claude.stdout.json"), stdout.Bytes(), 0o644)
 	os.WriteFile(filepath.Join(dir, "claude.stderr.log"), stderr.Bytes(), 0o644)
 	res.FinalText = finalText(stdout.Bytes())
-	res.Patch = capturePatch(ctx, workspace, base, ignoredInstructions)
+	if rerr := restoreMissingInstructions(ctx, workspace, base, ignoredInstructions); rerr != nil && !res.ModelFailed() {
+		res.Status, res.Error = StatusWorkspaceError, "restore instructions: "+rerr.Error()
+	}
+	patch, perr := capturePatch(ctx, workspace, base)
+	if perr != nil {
+		if !res.ModelFailed() && !res.InfraFailed() {
+			res.Status, res.Error = StatusWorkspaceError, "capture patch: "+perr.Error()
+		}
+	} else {
+		res.Patch = patch
+	}
 	os.WriteFile(filepath.Join(dir, "patch.diff"), []byte(res.Patch), 0o644)
 
-	if res.ModelFailed() {
+	if res.ModelFailed() || res.InfraFailed() {
 		// The verifier would otherwise run against a workspace the model
 		// never finished changing — on an unmodified clone whose tests
 		// already pass, that scores a failed run as a success.
@@ -801,7 +825,7 @@ func (r *Runner) runJudge(ctx context.Context, task Task, attempt int, candidate
 
 func (r *Runner) callJudge(ctx context.Context, sid, prompt string, stdout, stderr io.Writer) (string, error) {
 	body, err := json.Marshal(anthropic.MessagesRequest{
-		Model: r.Options.Judge, MaxTokens: 1024,
+		Model: r.Options.Judge, MaxTokens: judgeMaxTokens,
 		Messages: []anthropic.Message{{Role: "user", Content: anthropic.MessageBody{{Type: "text", Text: prompt}}}},
 	})
 	if err != nil {
@@ -844,6 +868,9 @@ func (r *Runner) callJudge(ctx context.Context, sid, prompt string, stdout, stde
 		if block.Type == "text" {
 			text.WriteString(block.Text)
 		}
+	}
+	if message.StopReason == "max_tokens" {
+		return "", fmt.Errorf("judge response truncated (stop_reason=max_tokens)")
 	}
 	if strings.TrimSpace(text.String()) == "" {
 		return "", errors.New("Messages response contained no text")
@@ -939,8 +966,7 @@ func stripHarnessInstructions(root string) ([]string, error) {
 			}
 			return nil
 		}
-		name := strings.ToLower(entry.Name())
-		if name != "claude.md" && name != "agents.md" {
+		if !isHarnessInstruction(entry.Name()) {
 			return nil
 		}
 		rel, err := filepath.Rel(root, path)
@@ -1025,6 +1051,7 @@ func verify(ctx context.Context, ex Executor, dir string, c Command, logPath str
 }
 
 func evalEnv(env []string, o Options, sid, model string, homes ...string) []string {
+	env = sanitizeEvalEnv(env)
 	if len(homes) > 0 && homes[0] != "" {
 		env = setEnv(env, "HOME", homes[0])
 		env = setEnv(env, "CLAUDE_CONFIG_DIR", filepath.Join(homes[0], ".claude"))
@@ -1072,35 +1099,90 @@ func finalText(data []byte) string {
 	return strings.TrimSpace(string(data))
 }
 
-func capturePatch(ctx context.Context, dir, base string, ignore []string) string {
+func capturePatch(ctx context.Context, dir, base string) (string, error) {
 	// Intent-to-add makes untracked files visible to `git diff` without staging
 	// their contents. Diffing against the immutable pre-agent commit also
 	// includes staged changes and commits the candidate may have created.
 	add := exec.CommandContext(ctx, "git", "-C", dir, "add", "-A", "-N")
-	_ = add.Run()
-	args := []string{"diff", base, "--binary", "--no-ext-diff"}
-	args = append(args, patchIgnoreArgs(ignore)...)
-	return gitOutput(ctx, dir, args...)
+	if out, err := add.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("git add --intent-to-add: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return gitOutput(ctx, dir, "diff", base, "--binary", "--no-ext-diff")
 }
 
-// Isolation removed harness instruction files (CLAUDE.md/AGENTS.md) before
-// the candidate ran. That removal is a harness action, not the candidate's
-// work, and must not appear in the submitted patch.
-func patchIgnoreArgs(ignore []string) []string {
-	if len(ignore) == 0 {
+func gitOutput(ctx context.Context, dir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(out), fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	}
+	return string(out), nil
+}
+
+func commitHarnessChanges(ctx context.Context, dir, message string) error {
+	if _, err := gitOutput(ctx, dir, "add", "-A"); err != nil {
+		return err
+	}
+	status, err := gitOutput(ctx, dir, "status", "--porcelain")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(status) == "" {
 		return nil
 	}
-	args := []string{"--", "."}
-	for _, path := range ignore {
-		args = append(args, ":(exclude)"+path)
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "-c", "user.name=gremlord", "-c", "user.email=eval@gremlord", "commit", "--quiet", "--no-gpg-sign", "-m", message)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git commit: %w: %s", err, strings.TrimSpace(string(out)))
 	}
-	return args
+	return nil
 }
 
-func gitOutput(ctx context.Context, dir string, args ...string) string {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
-	out, _ := cmd.CombinedOutput()
-	return string(out)
+// Isolation deleted instruction files before the candidate ran. Restore any
+// that are still missing after the turn so the harness deletion is not part of
+// the recorded patch, while candidate recreations remain.
+func restoreMissingInstructions(ctx context.Context, dir, base string, paths []string) error {
+	var tracked []string
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		full := filepath.Join(dir, filepath.FromSlash(path))
+		if _, err := os.Stat(full); err == nil {
+			continue
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		if _, err := gitOutput(ctx, dir, "cat-file", "-e", base+":"+path); err != nil {
+			continue
+		}
+		tracked = append(tracked, path)
+	}
+	if len(tracked) == 0 {
+		return nil
+	}
+	_, err := gitOutput(ctx, dir, append([]string{"checkout", base, "--"}, tracked...)...)
+	return err
+}
+
+func isHarnessInstruction(name string) bool {
+	switch strings.ToLower(name) {
+	case "claude.md", "claude.local.md", "agents.md", "agents.override.md":
+		return true
+	default:
+		return false
+	}
+}
+
+func sanitizeEvalEnv(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, v := range env {
+		key, _, _ := strings.Cut(v, "=")
+		if strings.HasPrefix(key, "CLAUDE_CODE_") {
+			continue
+		}
+		out = append(out, v)
+	}
+	return out
 }
 func exitCode(err error) int {
 	if err == nil {

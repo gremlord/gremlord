@@ -38,7 +38,12 @@ case "$1" in
       *"git rev-parse HEAD"*) printf 'base-sha\n'; exit 0 ;;
       *"git add -A -N"*) exit 0 ;;
       *"iname CLAUDE.md"*) printf '/testbed/CLAUDE.md\n'; exit 0 ;;
-      *"git diff base-sha --binary --no-ext-diff"*) printf '%s' "${FAKE_DOCKER_PATCH:-}"; exit 0 ;;
+      *"test -e "*) exit 1 ;;
+      *"git cat-file -e"*) exit 0 ;;
+      *"git checkout base-sha --"*) exit 0 ;;
+      *"git diff base-sha --binary --no-ext-diff"*)
+        if [ "${FAKE_DOCKER_DIFF_FAIL:-}" = "1" ]; then echo "diff failed" >&2; exit 1; fi
+        printf '%s' "${FAKE_DOCKER_PATCH:-}"; exit 0 ;;
       *"/usr/local/bin/claude --print"*)
         if [ "${FAKE_DOCKER_CLAUDE_FAIL:-}" = "1" ]; then echo "candidate failed" >&2; exit 7; fi
         printf '%s' "${FAKE_DOCKER_CLAUDE_OUT:-{\"result\":\"done\"}}"
@@ -100,8 +105,8 @@ func TestRunDockerCandidateLifecycleAndRedaction(t *testing.T) {
 	if !strings.Contains(string(calls), "-u nonroot") || !strings.Contains(string(calls), "HOME=/tmp/gremlord-eval-home") || !strings.Contains(string(calls), "--strict-mcp-config") {
 		t.Errorf("candidate did not run as nonroot:\n%s", calls)
 	}
-	if !strings.Contains(string(calls), ":(exclude)CLAUDE.md") {
-		t.Errorf("harness instruction removal was not excluded from the patch:\n%s", calls)
+	if !strings.Contains(string(calls), "iname CLAUDE.local.md") || !strings.Contains(string(calls), "git checkout base-sha -- CLAUDE.md") {
+		t.Errorf("harness instruction isolation/restore missing:\n%s", calls)
 	}
 	if !strings.Contains(string(calls), "X-Agentic-Session: eval-session") || !strings.Contains(string(calls), "X-Agentic-Profile: main") {
 		t.Errorf("session/profile env missing:\n%s", calls)
@@ -135,6 +140,18 @@ func TestRunDockerCandidateClassifiesInfrastructureAndModelFailures(t *testing.T
 			t.Fatalf("result = %+v", result)
 		}
 	})
+}
+
+func TestRunDockerCandidateCaptureFailureIsInfrastructure(t *testing.T) {
+	dir := t.TempDir()
+	withFakeDockerEnv(t, dir)
+	t.Setenv("FAKE_DOCKER_DIFF_FAIL", "1")
+	result := RunDockerCandidate(context.Background(), DockerOptions{DockerBin: fakeDocker(t, dir)}, SWEBenchInstance{
+		InstanceImageKey: "image:latest",
+	}, "prompt", "auto", time.Minute, DockerContainerEnv{})
+	if result.Status != StatusDockerError || !strings.Contains(result.Error, "git diff") {
+		t.Fatalf("result = %+v", result)
+	}
 }
 
 func TestDockerContainerEnvAndArgRedaction(t *testing.T) {

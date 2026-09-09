@@ -224,7 +224,7 @@ func RunDockerCandidate(ctx context.Context, opts DockerOptions, instance SWEBen
 		return res
 	}
 	isolateCtx, isolateCancel := context.WithTimeout(ctx, opts.execTimeout())
-	ignoredOut, _, err := dockerExec(isolateCtx, opts, nil, []string{"bash", "-lc", `rm -rf /tmp/gremlord-eval-home && install -d -m 0700 -o nonroot -g nonroot /tmp/gremlord-eval-home && find /testbed -path /testbed/.git -prune -o -type f \( -iname CLAUDE.md -o -iname AGENTS.md \) -print -delete`}, &log, false, containerID)
+	ignoredOut, _, err := dockerExec(isolateCtx, opts, nil, []string{"bash", "-lc", `rm -rf /tmp/gremlord-eval-home && install -d -m 0700 -o nonroot -g nonroot /tmp/gremlord-eval-home && find /testbed -path /testbed/.git -prune -o -type f \( -iname CLAUDE.md -o -iname CLAUDE.local.md -o -iname AGENTS.md -o -iname AGENTS.override.md \) -print -delete`}, &log, false, containerID)
 	isolateCancel()
 	if err != nil {
 		res.Status, res.Error = StatusDockerError, "isolate candidate: "+err.Error()
@@ -260,15 +260,42 @@ func RunDockerCandidate(ctx context.Context, opts DockerOptions, instance SWEBen
 	}
 
 	diffCtx, diffCancel := context.WithTimeout(ctx, opts.execTimeout())
+	defer diffCancel()
+	for _, path := range ignoredInstructions {
+		if path == "" {
+			continue
+		}
+		full := dockerWorkdir + "/" + path
+		_, _, missing := dockerExec(diffCtx, opts, nil, []string{"test", "-e", full}, &log, true, containerID)
+		if missing == nil {
+			continue
+		}
+		if _, _, err := dockerExec(diffCtx, opts, nil, []string{"git", "cat-file", "-e", base + ":" + path}, &log, true, containerID); err != nil {
+			continue
+		}
+		if _, _, err := dockerExec(diffCtx, opts, nil, []string{"git", "checkout", base, "--", path}, &log, false, containerID); err != nil {
+			if res.Status == StatusComplete {
+				res.Status, res.Error = StatusDockerError, "restore instructions: "+err.Error()
+			}
+			res.ContainerLog = log.Bytes()
+			return res
+		}
+	}
 	_, _, aerr := dockerExec(diffCtx, opts, nil, []string{"git", "add", "-A", "-N"}, &log, false, containerID)
 	if aerr != nil {
-		logf("git add --intent-to-add: %v", aerr)
+		if res.Status == StatusComplete {
+			res.Status, res.Error = StatusDockerError, "git add --intent-to-add: "+aerr.Error()
+		}
+		res.ContainerLog = log.Bytes()
+		return res
 	}
-	diffArgs := append([]string{"git", "diff", base, "--binary", "--no-ext-diff"}, patchIgnoreArgs(ignoredInstructions)...)
-	patch, _, perr := dockerExec(diffCtx, opts, nil, diffArgs, &log, false, containerID)
-	diffCancel()
+	patch, _, perr := dockerExec(diffCtx, opts, nil, []string{"git", "diff", base, "--binary", "--no-ext-diff"}, &log, false, containerID)
 	if perr != nil {
-		logf("git diff: %v", perr)
+		if res.Status == StatusComplete {
+			res.Status, res.Error = StatusDockerError, "git diff: "+perr.Error()
+		}
+		res.ContainerLog = log.Bytes()
+		return res
 	}
 	res.Patch = string(patch)
 	res.ContainerLog = log.Bytes()
