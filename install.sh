@@ -55,9 +55,13 @@ prompt_install() {
 }
 
 echo "Fetching latest release..."
-tag=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
-  | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
-if [ -z "$tag" ]; then
+# Resolve GitHub's stable latest-release redirect instead of spending an
+# unauthenticated API request. The API limit is shared by every user behind a
+# NAT/proxy and returns 403 once exhausted, which made the installer flaky.
+latest_url=$(curl -fsSL -o /dev/null -w '%{url_effective}' \
+  "https://github.com/$REPO/releases/latest")
+tag=${latest_url##*/}
+if [ -z "$tag" ] || [ "$tag" = "latest" ]; then
   echo "could not determine latest release of $REPO" >&2
   exit 1
 fi
