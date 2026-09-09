@@ -51,7 +51,7 @@ func TranslateRequest(req *anthropic.MessagesRequest, route config.Resolved) (*o
 		}
 		out.Tools = append(out.Tools, openai.Tool{
 			Type:     "function",
-			Function: openai.Function{Name: t.Name, Description: t.Description, Parameters: t.InputSchema},
+			Function: openai.Function{Name: t.Name, Description: t.Description, Parameters: sanitizeToolSchema(t.InputSchema)},
 		})
 	}
 
