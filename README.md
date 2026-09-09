@@ -184,7 +184,7 @@ gremlord budget set --daily 25
 
 Edits apply to live sessions immediately — the CLI hot-reloads the running router.
 
-Launching `gremlord` holds the Gremlord banner for ten seconds before Claude Code
+Launching `gremlord` holds the Gremlord banner for three seconds before Claude Code
 takes over. `splash_seconds: 0` in the config turns it off permanently, or
 `GREMLORD_SPLASH_SECONDS=0` for one shell. It writes to stderr and is skipped
 entirely when stderr is not a terminal, so pipes, CI and scripted launches never
