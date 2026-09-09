@@ -103,11 +103,15 @@ func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		got := r.Header.Get("x-api-key")
-		if got == "" {
-			got = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		}
-		if subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) != 1 {
+		// Claude Code sends BOTH headers when a /login managed key and
+		// ANTHROPIC_AUTH_TOKEN are present: x-api-key carries the managed key
+		// and Authorization carries our local token. Accept the local token
+		// from either header rather than trusting only the first one found.
+		apiKey := r.Header.Get("x-api-key")
+		bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		apiKeyOK := apiKey != "" && subtle.ConstantTimeCompare([]byte(apiKey), []byte(s.token)) == 1
+		bearerOK := bearer != "" && subtle.ConstantTimeCompare([]byte(bearer), []byte(s.token)) == 1
+		if !apiKeyOK && !bearerOK {
 			anthropic.WriteError(w, 401, "authentication_error",
 				"gremlord router: invalid local token (launch sessions via `gremlord`)")
 			return
