@@ -45,7 +45,7 @@ func TranslateResponsesRequest(req *anthropic.MessagesRequest, route config.Reso
 			Type:        "function",
 			Name:        t.Name,
 			Description: t.Description,
-			Parameters:  t.InputSchema,
+			Parameters:  sanitizeToolSchema(t.InputSchema),
 		})
 	}
 
