@@ -18,7 +18,7 @@ var bannerFS embed.FS
 
 // DefaultSplashSeconds is how long the banner is held before Claude Code takes
 // the terminal.
-const DefaultSplashSeconds = 10
+const DefaultSplashSeconds = 3
 
 var taglines = []string{
 	"it's smart. it's in the wires. it's already in prod.",
