@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,7 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gremlord/gremlord/internal/anthropic"
 	"github.com/gremlord/gremlord/internal/store"
+	"github.com/gremlord/gremlord/internal/wire"
 )
 
 func TestLoadManifestStrictAndValidates(t *testing.T) {
@@ -151,6 +155,31 @@ func TestDeterministicWinnerRequiresVerifier(t *testing.T) {
 	}
 }
 
+func judgeServer(t *testing.T, response string, status int, inspect ...func(*http.Request, []byte)) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+		}
+		for _, fn := range inspect {
+			fn(r, body)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		if status >= 200 && status < 300 {
+			data, _ := json.Marshal(map[string]any{
+				"id": "msg_judge", "type": "message", "role": "assistant", "model": "judge-model",
+				"content":     []map[string]string{{"type": "text", "text": response}},
+				"stop_reason": "end_turn", "usage": map[string]int{"input_tokens": 1, "output_tokens": 1},
+			})
+			_, _ = w.Write(data)
+			return
+		}
+		_, _ = w.Write([]byte(response))
+	}))
+}
+
 type scriptExecutor struct {
 	setupErr     error
 	claudeErr    error
@@ -245,6 +274,121 @@ func TestPrepareWorkspaceChecksOutCommitSHA(t *testing.T) {
 	}
 	if got := headSHA(t, dst); got != sha {
 		t.Errorf("checked out %s, want %s", got, sha)
+	}
+}
+
+func TestCapturePatchIncludesAllCandidateChanges(t *testing.T) {
+	repo := gitRepo(t)
+	if err := os.WriteFile(filepath.Join(repo, "file.txt"), []byte("staged\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "-C", repo, "add", "file.txt").CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v: %s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "untracked.txt"), []byte("new\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	patch, err := capturePatch(context.Background(), repo, headSHA(t, repo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"+staged", "diff --git a/untracked.txt b/untracked.txt", "+new"} {
+		if !strings.Contains(patch, want) {
+			t.Errorf("patch missing %q:\n%s", want, patch)
+		}
+	}
+}
+
+func TestCapturePatchIncludesCandidateCommits(t *testing.T) {
+	repo := gitRepo(t)
+	base := headSHA(t, repo)
+	if err := os.WriteFile(filepath.Join(repo, "file.txt"), []byte("committed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "-C", repo, "commit", "-am", "candidate")
+	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v: %s", err, out)
+	}
+	patch, err := capturePatch(context.Background(), repo, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(patch, "+committed") {
+		t.Fatalf("patch omitted committed change:\n%s", patch)
+	}
+}
+
+func TestCapturePatchExcludesHarnessInstructionRemoval(t *testing.T) {
+	repo := gitRepo(t)
+	base := headSHA(t, repo)
+	instruction := filepath.Join(repo, "CLAUDE.md")
+	if err := os.WriteFile(instruction, []byte("harness instruction\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "-C", repo, "add", "CLAUDE.md")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v: %s", err, out)
+	}
+	cmd = exec.Command("git", "-C", repo, "commit", "-m", "instructions")
+	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v: %s", err, out)
+	}
+	base = headSHA(t, repo)
+	if err := os.Remove(instruction); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "file.txt"), []byte("candidate\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := restoreMissingInstructions(context.Background(), repo, base, []string{"CLAUDE.md"}); err != nil {
+		t.Fatal(err)
+	}
+	patch, err := capturePatch(context.Background(), repo, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(patch, "CLAUDE.md") || !strings.Contains(patch, "+candidate") {
+		t.Fatalf("patch did not isolate harness removal:\n%s", patch)
+	}
+}
+
+func TestCandidateArgsDisableNonComparableTools(t *testing.T) {
+	args := candidateArgs("claude", "model", "prompt")
+	for _, want := range []string{"Task,WebSearch,WebFetch", "--strict-mcp-config", `{"mcpServers":{}}`, "--setting-sources"} {
+		if !containsArg(args, want) {
+			t.Errorf("candidate args missing %q: %v", want, args)
+		}
+	}
+}
+
+func TestStripHarnessInstructions(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "nested", ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{filepath.Join(root, "CLAUDE.md"), filepath.Join(root, "CLAUDE.local.md"), filepath.Join(root, "nested", "AGENTS.md"), filepath.Join(root, "nested", "AGENTS.override.md"), filepath.Join(root, "nested", ".git", "CLAUDE.md"), filepath.Join(root, "keep.md")} {
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	removed, err := stripHarnessInstructions(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 4 {
+		t.Fatalf("removed = %v", removed)
+	}
+	for _, path := range []string{filepath.Join(root, "CLAUDE.md"), filepath.Join(root, "CLAUDE.local.md"), filepath.Join(root, "nested", "AGENTS.md"), filepath.Join(root, "nested", "AGENTS.override.md")} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("instruction file survived: %s", path)
+		}
+	}
+	for _, path := range []string{filepath.Join(root, "nested", ".git", "CLAUDE.md"), filepath.Join(root, "keep.md")} {
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("non-target was removed: %s: %v", path, err)
+		}
 	}
 }
 
@@ -426,24 +570,38 @@ func TestAggregateCountsSingleInfraPairForTwoFailedCandidates(t *testing.T) {
 	}
 }
 
-func TestJudgeRunsFromBlindedWorkspace(t *testing.T) {
+func TestJudgeUsesDirectBlindedMessagesRequest(t *testing.T) {
 	repo := gitRepo(t)
-	ex := &scriptExecutor{
-		claudeStdout: `{"result":"done"}`,
-		judgeStdout:  `{"winner":"tie","confidence":1,"reason":"equal","candidate_1_score":3,"candidate_2_score":3}`,
-	}
+	ex := &scriptExecutor{claudeStdout: `{"result":"done"}`}
+	judge := judgeServer(t, `{"winner":"tie","confidence":1,"reason":"equal","candidate_1_score":3,"candidate_2_score":3}`, http.StatusOK,
+		func(req *http.Request, body []byte) {
+			if req.URL.Path != "/v1/messages" || req.Header.Get("x-api-key") != "token" || req.Header.Get(wire.HeaderPinModel) != "judge-model" {
+				t.Errorf("judge request = %s headers=%v", req.URL.Path, req.Header)
+			}
+			var message anthropic.MessagesRequest
+			if err := json.Unmarshal(body, &message); err != nil {
+				t.Error(err)
+				return
+			}
+			text := message.Messages[0].Content[0].Text
+			if message.Model != "judge-model" || message.MaxTokens != judgeMaxTokens || !strings.Contains(text, "Candidate identities and order are randomized") || strings.Contains(text, "Model: a") || strings.Contains(text, "Model: b") {
+				t.Errorf("unblinded or malformed judge request: %+v", message)
+			}
+		})
+	defer judge.Close()
 	out := t.TempDir()
 	runner := &Runner{Exec: ex, Options: Options{
-		Baseline: "a", MUT: "b", Judge: "judge-model", OutputDir: out,
+		Baseline: "a", MUT: "b", Judge: "judge-model", OutputDir: out, BaseURL: judge.URL, Token: "token", Profile: "main",
 		Timeout: time.Minute, ClaudeBin: "claude",
 	}}
 	if _, err := runner.Run(context.Background(), testManifest(repo, "")); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasSuffix(ex.judgeDir, filepath.Join("judge", "workspace")) {
-		t.Fatalf("judge dir = %q, want isolated judge/workspace", ex.judgeDir)
+	if ex.judgeDir != "" {
+		t.Fatalf("judge unexpectedly ran through candidate executor in %q", ex.judgeDir)
 	}
-	entries, err := os.ReadDir(ex.judgeDir)
+	workDir := filepath.Join(out, "tasks", "task-a", "attempt-001", "judge", "workspace")
+	entries, err := os.ReadDir(workDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -454,9 +612,11 @@ func TestJudgeRunsFromBlindedWorkspace(t *testing.T) {
 
 func TestJudgeFailureIsRecordedAndRunContinues(t *testing.T) {
 	repo := gitRepo(t)
-	ex := &scriptExecutor{claudeStdout: `{"result":"done"}`, judgeStdout: "not json"}
+	ex := &scriptExecutor{claudeStdout: `{"result":"done"}`}
+	judge := judgeServer(t, "not json", http.StatusOK)
+	defer judge.Close()
 	runner := &Runner{Exec: ex, Options: Options{
-		Baseline: "a", MUT: "b", Judge: "judge-model", OutputDir: t.TempDir(),
+		Baseline: "a", MUT: "b", Judge: "judge-model", OutputDir: t.TempDir(), BaseURL: judge.URL,
 		Timeout: time.Minute, ClaudeBin: "claude", Attempts: 2,
 	}}
 	s, err := runner.Run(context.Background(), testManifest(repo, ""))
@@ -502,9 +662,11 @@ func TestTelemetryPopulatesUsageAndRoutes(t *testing.T) {
 }
 
 func TestEvalEnvRoutesAndAttributes(t *testing.T) {
-	env := evalEnv([]string{"ANTHROPIC_API_KEY=bad"}, Options{BaseURL: "http://router", Token: "token", Profile: "main"}, "eval-1", "gpt-5.6-sol")
+	home := filepath.Join(t.TempDir(), "home")
+	env := evalEnv([]string{"ANTHROPIC_API_KEY=bad", "CLAUDE_CODE_DISABLE_THINKING=1", "CLAUDE_CODE_MAX_TURNS=2"}, Options{BaseURL: "http://router", Token: "token", Profile: "main"}, "eval-1", "gpt-5.6-sol", home)
 	joined := strings.Join(env, "\n")
 	for _, want := range []string{
+		"HOME=" + home, "CLAUDE_CONFIG_DIR=" + filepath.Join(home, ".claude"),
 		"ANTHROPIC_BASE_URL=http://router", "ANTHROPIC_AUTH_TOKEN=token",
 		"X-Agentic-Session: eval-1", "AGENTIC_SESSION_ID=eval-1",
 		"X-Agentic-Pin-Model: gpt-5.6-sol",
@@ -521,6 +683,9 @@ func TestEvalEnvRoutesAndAttributes(t *testing.T) {
 	}
 	if strings.Contains(joined, "ANTHROPIC_API_KEY=") {
 		t.Errorf("api key was not removed")
+	}
+	if strings.Contains(joined, "CLAUDE_CODE_DISABLE_THINKING=") || strings.Contains(joined, "CLAUDE_CODE_MAX_TURNS=") {
+		t.Errorf("claude code controls were inherited: %s", joined)
 	}
 }
 
@@ -594,4 +759,122 @@ func TestEvalEnvPinsToolSearch(t *testing.T) {
 			t.Errorf("with %q inherited, the inherited value survived: %s", inherited, joined)
 		}
 	}
+}
+
+func TestCapturePatchKeepsCandidateInstructionRecreation(t *testing.T) {
+	repo := gitRepo(t)
+	instruction := filepath.Join(repo, "CLAUDE.md")
+	if err := os.WriteFile(instruction, []byte("harness instruction\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "-C", repo, "add", "CLAUDE.md")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v: %s", err, out)
+	}
+	cmd = exec.Command("git", "-C", repo, "commit", "-m", "instructions")
+	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v: %s", err, out)
+	}
+	base := headSHA(t, repo)
+	if err := os.Remove(instruction); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(instruction, []byte("candidate instruction\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := restoreMissingInstructions(context.Background(), repo, base, []string{"CLAUDE.md"}); err != nil {
+		t.Fatal(err)
+	}
+	patch, err := capturePatch(context.Background(), repo, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(patch, "diff --git a/CLAUDE.md b/CLAUDE.md") || !strings.Contains(patch, "+candidate instruction") {
+		t.Fatalf("candidate instruction recreation was dropped:\n%s", patch)
+	}
+}
+
+func TestCapturePatchReportsGitFailure(t *testing.T) {
+	if _, err := capturePatch(context.Background(), t.TempDir(), "HEAD"); err == nil {
+		t.Fatal("expected capture error for a non-git directory")
+	}
+}
+
+func TestResumeRejectsJudgeMismatch(t *testing.T) {
+	repo := gitRepo(t)
+	out := t.TempDir()
+	old := &Summary{SchemaVersion: SchemaVersion, Name: "unit", Baseline: "a", MUT: "b", Judge: "sonnet", Seed: 1}
+	if err := writeJSONAtomic(filepath.Join(out, "summary.json"), old); err != nil {
+		t.Fatal(err)
+	}
+	runner := &Runner{Exec: &scriptExecutor{claudeStdout: `{"result":"done"}`}, Options: Options{
+		Baseline: "a", MUT: "b", Judge: "opus", Resume: true, OutputDir: out,
+		Timeout: time.Minute, ClaudeBin: "claude",
+	}}
+	if _, err := runner.Run(context.Background(), testManifest(repo, "")); err == nil || !strings.Contains(err.Error(), "do not match") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestJudgeRejectsTruncatedResponse(t *testing.T) {
+	repo := gitRepo(t)
+	ex := &scriptExecutor{claudeStdout: `{"result":"done"}`}
+	judge := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		data, _ := json.Marshal(map[string]any{
+			"id": "msg_judge", "type": "message", "role": "assistant", "model": "judge-model",
+			"content":     []map[string]string{{"type": "text", "text": `{"winner":"tie"`}},
+			"stop_reason": "max_tokens",
+		})
+		_, _ = w.Write(data)
+	}))
+	defer judge.Close()
+	runner := &Runner{Exec: ex, Options: Options{
+		Baseline: "a", MUT: "b", Judge: "judge-model", OutputDir: t.TempDir(), BaseURL: judge.URL,
+		Timeout: time.Minute, ClaudeBin: "claude",
+	}}
+	s, err := runner.Run(context.Background(), testManifest(repo, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.JudgeErrors != 1 || s.Pairs[0].Winner != WinnerJudgeError || !strings.Contains(s.Pairs[0].JudgeError, "truncated") {
+		t.Fatalf("summary = %+v", s)
+	}
+}
+
+func TestSetupChangesAreCommittedOutOfTheCandidatePatch(t *testing.T) {
+	repo := gitRepo(t)
+	ex := &setupMutatingExecutor{scriptExecutor: scriptExecutor{claudeStdout: `{"result":"done"}`}}
+	manifest := testManifest(repo, "")
+	manifest.Setup = Command{Run: []string{"setup"}}
+	out := t.TempDir()
+	runner := &Runner{Exec: ex, Options: Options{
+		Baseline: "a", MUT: "b", Judge: "none", OutputDir: out,
+		Timeout: time.Minute, ClaudeBin: "claude",
+	}}
+	if _, err := runner.Run(context.Background(), manifest); err != nil {
+		t.Fatal(err)
+	}
+	patch, err := os.ReadFile(filepath.Join(out, "tasks", "task-a", "attempt-001", "baseline", "patch.diff"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(patch), "+setup") {
+		t.Fatalf("setup edit leaked into candidate patch:\n%s", patch)
+	}
+}
+
+type setupMutatingExecutor struct {
+	scriptExecutor
+}
+
+func (s *setupMutatingExecutor) Run(ctx context.Context, dir string, env []string, argv []string, input io.Reader, stdout, stderr io.Writer) error {
+	if containsArg(argv, "setup") {
+		if err := os.WriteFile(filepath.Join(dir, "file.txt"), []byte("setup\n"), 0o644); err != nil {
+			return err
+		}
+		return nil
+	}
+	return s.scriptExecutor.Run(ctx, dir, env, argv, input, stdout, stderr)
 }

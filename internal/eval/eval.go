@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/gremlord/gremlord/internal/anthropic"
 	"github.com/gremlord/gremlord/internal/config"
 	"github.com/gremlord/gremlord/internal/store"
 
@@ -28,6 +30,10 @@ import (
 )
 
 const SchemaVersion = 1
+
+// judgeMaxTokens is large enough for a blinded JSON verdict with a
+// reasoned comparison. Truncation is treated as a missing measurement.
+const judgeMaxTokens = 4096
 
 // Candidate outcome states. Only StatusComplete means the model actually
 // finished its turn; the others separate model failure (timeout, non-zero
@@ -289,6 +295,7 @@ type CandidateResult struct {
 	SessionID  string         `json:"session_id"`
 	Status     string         `json:"status"`
 	DurationMS int64          `json:"duration_ms"`
+	AgentMS    int64          `json:"agent_ms"`
 	ExitCode   int            `json:"exit_code"`
 	FinalText  string         `json:"final_text,omitempty"`
 	Patch      string         `json:"patch,omitempty"`
@@ -407,6 +414,7 @@ func (OSExecutor) Run(ctx context.Context, dir string, env, argv []string, stdin
 type Runner struct {
 	Options     Options
 	Exec        Executor
+	JudgeClient *http.Client
 	OnCandidate func(CandidateResult)
 
 	// Dataset-only runtime state, populated once at the start of Run. The
@@ -481,6 +489,7 @@ func (r *Runner) Run(ctx context.Context, manifest *Manifest) (*Summary, error) 
 				return nil, err
 			}
 			if old.Baseline != r.Options.Baseline || old.MUT != r.Options.MUT || old.Seed != r.Options.Seed ||
+				old.Judge != r.Options.Judge ||
 				old.DatasetFingerprint != s.DatasetFingerprint || old.SWEBenchVersion != s.SWEBenchVersion {
 				return nil, fmt.Errorf("resume options or benchmark environment do not match existing run")
 			}
@@ -620,15 +629,41 @@ func (r *Runner) runCandidate(ctx context.Context, manifest *Manifest, task Task
 		res.Verifier.Skipped = "setup failed"
 		return res, nil
 	}
+	// Setup is harness work. Commit it before recording the patch base so
+	// uncommitted setup edits are not attributed to the candidate, and so
+	// committed setup is part of the base the patch applies to.
+	if err := commitHarnessChanges(ctx, workspace, "gremlord eval setup"); err != nil {
+		res.Status, res.Error = StatusSetupError, "commit setup: "+err.Error()
+		res.Verifier.Skipped = "setup commit failed"
+		return res, nil
+	}
+	base, err := gitOutput(ctx, workspace, "rev-parse", "HEAD")
+	base = strings.TrimSpace(base)
+	if err != nil || base == "" {
+		res.Status, res.Error = StatusWorkspaceError, "workspace has no base commit"
+		res.Verifier.Skipped = "workspace base could not be recorded"
+		return res, nil
+	}
+	ignoredInstructions, err := stripHarnessInstructions(workspace)
+	if err != nil {
+		res.Status, res.Error = StatusWorkspaceError, "strip harness instructions: "+err.Error()
+		res.Verifier.Skipped = "workspace isolation failed"
+		return res, nil
+	}
+	home := filepath.Join(dir, "home")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		return res, err
+	}
 
-	argv := []string{r.Options.ClaudeBin, "--print", "--output-format", "json", "--permission-mode", "bypassPermissions", "--disallowedTools", "Task", "--model", model, task.Prompt}
-	env := evalEnv(os.Environ(), r.Options, res.SessionID, model)
+	argv := candidateArgs(r.Options.ClaudeBin, model, task.Prompt)
+	env := evalEnv(os.Environ(), r.Options, res.SessionID, model, home)
 	var stdout, stderr bytes.Buffer
 	start := time.Now()
 	runCtx, cancel := context.WithTimeout(ctx, r.Options.Timeout)
-	err := r.Exec.Run(runCtx, workspace, env, argv, nil, &stdout, &stderr)
+	err = r.Exec.Run(runCtx, workspace, env, argv, nil, &stdout, &stderr)
 	cancel()
 	res.DurationMS = time.Since(start).Milliseconds()
+	res.AgentMS = res.DurationMS
 	res.ExitCode = exitCode(err)
 	switch {
 	case errors.Is(runCtx.Err(), context.DeadlineExceeded):
@@ -641,10 +676,20 @@ func (r *Runner) runCandidate(ctx context.Context, manifest *Manifest, task Task
 	os.WriteFile(filepath.Join(dir, "claude.stdout.json"), stdout.Bytes(), 0o644)
 	os.WriteFile(filepath.Join(dir, "claude.stderr.log"), stderr.Bytes(), 0o644)
 	res.FinalText = finalText(stdout.Bytes())
-	res.Patch = gitOutput(ctx, workspace, "diff", "--binary", "--no-ext-diff")
+	if rerr := restoreMissingInstructions(ctx, workspace, base, ignoredInstructions); rerr != nil && !res.ModelFailed() {
+		res.Status, res.Error = StatusWorkspaceError, "restore instructions: "+rerr.Error()
+	}
+	patch, perr := capturePatch(ctx, workspace, base)
+	if perr != nil {
+		if !res.ModelFailed() && !res.InfraFailed() {
+			res.Status, res.Error = StatusWorkspaceError, "capture patch: "+perr.Error()
+		}
+	} else {
+		res.Patch = patch
+	}
 	os.WriteFile(filepath.Join(dir, "patch.diff"), []byte(res.Patch), 0o644)
 
-	if res.ModelFailed() {
+	if res.ModelFailed() || res.InfraFailed() {
 		// The verifier would otherwise run against a workspace the model
 		// never finished changing — on an unmodified clone whose tests
 		// already pass, that scores a failed run as a success.
@@ -666,6 +711,10 @@ func (r *Runner) runCandidate(ctx context.Context, manifest *Manifest, task Task
 		return res, err
 	}
 	return res, nil
+}
+
+func candidateArgs(bin, model, prompt string) []string {
+	return []string{bin, "--print", "--output-format", "json", "--permission-mode", "bypassPermissions", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--setting-sources", "", "--disallowedTools", "Task,WebSearch,WebFetch", "--model", model, prompt}
 }
 
 // firstLine is the most useful part of a verifier's output for an error
@@ -740,7 +789,6 @@ func (r *Runner) runJudge(ctx context.Context, task Task, attempt int, candidate
 		mapping["candidate_1"], mapping["candidate_2"] = "mut", "baseline"
 	}
 	prompt := judgePrompt(task, first, second)
-	argv := []string{r.Options.ClaudeBin, "--print", "--output-format", "json", "--permission-mode", "bypassPermissions", "--disallowedTools", "Task", "--model", r.Options.Judge, prompt}
 	sid := sessionID(r.Options.Seed, task.ID, attempt, "judge", r.Options.Judge)
 	var stdout, stderr bytes.Buffer
 	judgeDir := filepath.Join(pairDir, "judge")
@@ -752,7 +800,7 @@ func (r *Runner) runJudge(ctx context.Context, task Task, attempt int, candidate
 		return JudgeResult{}, "", err
 	}
 	judgeCtx, cancel := context.WithTimeout(ctx, r.Options.Timeout)
-	err := r.Exec.Run(judgeCtx, workDir, evalEnv(os.Environ(), r.Options, sid, r.Options.Judge), argv, nil, &stdout, &stderr)
+	text, err := r.callJudge(judgeCtx, sid, prompt, &stdout, &stderr)
 	cancel()
 	os.WriteFile(filepath.Join(judgeDir, "stdout.json"), stdout.Bytes(), 0o644)
 	os.WriteFile(filepath.Join(judgeDir, "stderr.log"), stderr.Bytes(), 0o644)
@@ -761,7 +809,7 @@ func (r *Runner) runJudge(ctx context.Context, task Task, attempt int, candidate
 		return JudgeResult{}, "", fmt.Errorf("judge: %w", err)
 	}
 	var result JudgeResult
-	if err := json.Unmarshal([]byte(finalText(stdout.Bytes())), &result); err != nil {
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
 		return JudgeResult{}, "", fmt.Errorf("judge returned invalid JSON: %w", err)
 	}
 	if result.Winner != "candidate_1" && result.Winner != "candidate_2" && result.Winner != WinnerTie {
@@ -773,6 +821,61 @@ func (r *Runner) runJudge(ctx context.Context, task Task, attempt int, candidate
 	}
 	writeJSONAtomic(filepath.Join(judgeDir, "result.json"), result)
 	return result, winner, nil
+}
+
+func (r *Runner) callJudge(ctx context.Context, sid, prompt string, stdout, stderr io.Writer) (string, error) {
+	body, err := json.Marshal(anthropic.MessagesRequest{
+		Model: r.Options.Judge, MaxTokens: judgeMaxTokens,
+		Messages: []anthropic.Message{{Role: "user", Content: anthropic.MessageBody{{Type: "text", Text: prompt}}}},
+	})
+	if err != nil {
+		return "", err
+	}
+	url := strings.TrimSuffix(r.Options.BaseURL, "/") + "/v1/messages"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", r.Options.Token)
+	req.Header.Set(wire.HeaderSession, sid)
+	req.Header.Set(wire.HeaderProfile, r.Options.Profile)
+	req.Header.Set(wire.HeaderPinModel, r.Options.Judge)
+	client := r.JudgeClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	data, readErr := io.ReadAll(resp.Body)
+	_, _ = stdout.Write(data)
+	if readErr != nil {
+		return "", readErr
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		_, _ = fmt.Fprintf(stderr, "HTTP %d: %s", resp.StatusCode, data)
+		return "", fmt.Errorf("router returned HTTP %d: %s", resp.StatusCode, truncate(strings.TrimSpace(string(data)), 1000))
+	}
+	var message anthropic.MessagesResponse
+	if err := json.Unmarshal(data, &message); err != nil {
+		return "", fmt.Errorf("decode Messages response: %w", err)
+	}
+	var text strings.Builder
+	for _, block := range message.Content {
+		if block.Type == "text" {
+			text.WriteString(block.Text)
+		}
+	}
+	if message.StopReason == "max_tokens" {
+		return "", fmt.Errorf("judge response truncated (stop_reason=max_tokens)")
+	}
+	if strings.TrimSpace(text.String()) == "" {
+		return "", errors.New("Messages response contained no text")
+	}
+	return strings.TrimSpace(text.String()), nil
 }
 
 func judgePrompt(task Task, a, b CandidateResult) string {
@@ -851,6 +954,34 @@ func (s *Summary) aggregate() {
 	}
 }
 
+func stripHarnessInstructions(root string) ([]string, error) {
+	var removed []string
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			if path != root && entry.Name() == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !isHarnessInstruction(entry.Name()) {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+		removed = append(removed, filepath.ToSlash(rel))
+		return nil
+	})
+	return removed, err
+}
+
 // prepareWorkspace clones the task repository and checks out its base. SWE-bench
 // manifests pin a commit SHA, which `git clone --branch` rejects, so the
 // checkout is a separate detached step that accepts a branch, tag, or SHA.
@@ -919,7 +1050,12 @@ func verify(ctx context.Context, ex Executor, dir string, c Command, logPath str
 	return v
 }
 
-func evalEnv(env []string, o Options, sid, model string) []string {
+func evalEnv(env []string, o Options, sid, model string, homes ...string) []string {
+	env = sanitizeEvalEnv(env)
+	if len(homes) > 0 && homes[0] != "" {
+		env = setEnv(env, "HOME", homes[0])
+		env = setEnv(env, "CLAUDE_CONFIG_DIR", filepath.Join(homes[0], ".claude"))
+	}
 	env = setEnv(env, "ANTHROPIC_BASE_URL", o.BaseURL)
 	env = setEnv(env, "ANTHROPIC_AUTH_TOKEN", o.Token)
 	env = unsetEnv(env, "ANTHROPIC_API_KEY")
@@ -963,10 +1099,90 @@ func finalText(data []byte) string {
 	return strings.TrimSpace(string(data))
 }
 
-func gitOutput(ctx context.Context, dir string, args ...string) string {
+func capturePatch(ctx context.Context, dir, base string) (string, error) {
+	// Intent-to-add makes untracked files visible to `git diff` without staging
+	// their contents. Diffing against the immutable pre-agent commit also
+	// includes staged changes and commits the candidate may have created.
+	add := exec.CommandContext(ctx, "git", "-C", dir, "add", "-A", "-N")
+	if out, err := add.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("git add --intent-to-add: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return gitOutput(ctx, dir, "diff", base, "--binary", "--no-ext-diff")
+}
+
+func gitOutput(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
-	out, _ := cmd.CombinedOutput()
-	return string(out)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(out), fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	}
+	return string(out), nil
+}
+
+func commitHarnessChanges(ctx context.Context, dir, message string) error {
+	if _, err := gitOutput(ctx, dir, "add", "-A"); err != nil {
+		return err
+	}
+	status, err := gitOutput(ctx, dir, "status", "--porcelain")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(status) == "" {
+		return nil
+	}
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "-c", "user.name=gremlord", "-c", "user.email=eval@gremlord", "commit", "--quiet", "--no-gpg-sign", "-m", message)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git commit: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// Isolation deleted instruction files before the candidate ran. Restore any
+// that are still missing after the turn so the harness deletion is not part of
+// the recorded patch, while candidate recreations remain.
+func restoreMissingInstructions(ctx context.Context, dir, base string, paths []string) error {
+	var tracked []string
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		full := filepath.Join(dir, filepath.FromSlash(path))
+		if _, err := os.Stat(full); err == nil {
+			continue
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		if _, err := gitOutput(ctx, dir, "cat-file", "-e", base+":"+path); err != nil {
+			continue
+		}
+		tracked = append(tracked, path)
+	}
+	if len(tracked) == 0 {
+		return nil
+	}
+	_, err := gitOutput(ctx, dir, append([]string{"checkout", base, "--"}, tracked...)...)
+	return err
+}
+
+func isHarnessInstruction(name string) bool {
+	switch strings.ToLower(name) {
+	case "claude.md", "claude.local.md", "agents.md", "agents.override.md":
+		return true
+	default:
+		return false
+	}
+}
+
+func sanitizeEvalEnv(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, v := range env {
+		key, _, _ := strings.Cut(v, "=")
+		if strings.HasPrefix(key, "CLAUDE_CODE_") {
+			continue
+		}
+		out = append(out, v)
+	}
+	return out
 }
 func exitCode(err error) int {
 	if err == nil {

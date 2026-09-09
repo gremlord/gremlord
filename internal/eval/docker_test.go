@@ -35,7 +35,15 @@ case "$1" in
     case "$all" in
       *"registry.npmjs.org/@anthropic-ai/claude-code-linux-x64"*) exit 0 ;;
       *"command -v claude"*) printf '/usr/local/bin/claude\n'; exit 0 ;;
-      *"git diff --binary --no-ext-diff"*) printf '%s' "${FAKE_DOCKER_PATCH:-}"; exit 0 ;;
+      *"git rev-parse HEAD"*) printf 'base-sha\n'; exit 0 ;;
+      *"git add -A -N"*) exit 0 ;;
+      *"iname CLAUDE.md"*) printf '/testbed/CLAUDE.md\n'; exit 0 ;;
+      *"test -e "*) exit 1 ;;
+      *"git cat-file -e"*) exit 0 ;;
+      *"git checkout base-sha --"*) exit 0 ;;
+      *"git diff base-sha --binary --no-ext-diff"*)
+        if [ "${FAKE_DOCKER_DIFF_FAIL:-}" = "1" ]; then echo "diff failed" >&2; exit 1; fi
+        printf '%s' "${FAKE_DOCKER_PATCH:-}"; exit 0 ;;
       *"/usr/local/bin/claude --print"*)
         if [ "${FAKE_DOCKER_CLAUDE_FAIL:-}" = "1" ]; then echo "candidate failed" >&2; exit 7; fi
         printf '%s' "${FAKE_DOCKER_CLAUDE_OUT:-{\"result\":\"done\"}}"
@@ -69,7 +77,7 @@ func TestRunDockerCandidateLifecycleAndRedaction(t *testing.T) {
 	}, "fix the bug", "auto", time.Minute, DockerContainerEnv{
 		BaseURL: "http://host.docker.internal:41234", Token: "super-secret", SessionID: "eval-session", Profile: "main",
 	})
-	if result.Status != StatusComplete || result.ExitCode != 0 || !strings.Contains(result.Patch, "+new") {
+	if result.Status != StatusComplete || result.ExitCode != 0 || result.AgentMS > result.DurationMS || !strings.Contains(result.Patch, "+new") {
 		t.Fatalf("result = %+v", result)
 	}
 	if !strings.Contains(string(result.Stdout), `"result":"done"`) {
@@ -81,7 +89,7 @@ func TestRunDockerCandidateLifecycleAndRedaction(t *testing.T) {
 	}
 	for _, want := range []string{
 		"docker run", "claude code installed", "ANTHROPIC_AUTH_TOKEN=<redacted>",
-		"ANTHROPIC_BASE_URL=<redacted>", "git diff --binary --no-ext-diff",
+		"ANTHROPIC_BASE_URL=<redacted>", "git add -A -N", "git diff base-sha --binary --no-ext-diff",
 	} {
 		if !strings.Contains(log, want) {
 			t.Errorf("container log missing %q:\n%s", want, log)
@@ -94,8 +102,11 @@ func TestRunDockerCandidateLifecycleAndRedaction(t *testing.T) {
 	if !strings.Contains(string(calls), "rm -f container-123") {
 		t.Errorf("container was not removed:\n%s", calls)
 	}
-	if !strings.Contains(string(calls), "-u nonroot") || !strings.Contains(string(calls), "HOME=/home/nonroot") {
+	if !strings.Contains(string(calls), "-u nonroot") || !strings.Contains(string(calls), "HOME=/tmp/gremlord-eval-home") || !strings.Contains(string(calls), "--strict-mcp-config") {
 		t.Errorf("candidate did not run as nonroot:\n%s", calls)
+	}
+	if !strings.Contains(string(calls), "iname CLAUDE.local.md") || !strings.Contains(string(calls), "git checkout base-sha -- CLAUDE.md") {
+		t.Errorf("harness instruction isolation/restore missing:\n%s", calls)
 	}
 	if !strings.Contains(string(calls), "X-Agentic-Session: eval-session") || !strings.Contains(string(calls), "X-Agentic-Profile: main") {
 		t.Errorf("session/profile env missing:\n%s", calls)
@@ -131,6 +142,18 @@ func TestRunDockerCandidateClassifiesInfrastructureAndModelFailures(t *testing.T
 	})
 }
 
+func TestRunDockerCandidateCaptureFailureIsInfrastructure(t *testing.T) {
+	dir := t.TempDir()
+	withFakeDockerEnv(t, dir)
+	t.Setenv("FAKE_DOCKER_DIFF_FAIL", "1")
+	result := RunDockerCandidate(context.Background(), DockerOptions{DockerBin: fakeDocker(t, dir)}, SWEBenchInstance{
+		InstanceImageKey: "image:latest",
+	}, "prompt", "auto", time.Minute, DockerContainerEnv{})
+	if result.Status != StatusDockerError || !strings.Contains(result.Error, "git diff") {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
 func TestDockerContainerEnvAndArgRedaction(t *testing.T) {
 	env := containerEnvArgs(DockerContainerEnv{BaseURL: "url", Token: "token", SessionID: "sid", Profile: "profile", Model: "gpt-5.6-sol"})
 	joined := strings.Join(env, "\n")
@@ -143,6 +166,7 @@ func TestDockerContainerEnvAndArgRedaction(t *testing.T) {
 		"ANTHROPIC_DEFAULT_SONNET_MODEL=gpt-5.6-sol",
 		"ANTHROPIC_DEFAULT_HAIKU_MODEL=gpt-5.6-sol",
 		"CLAUDE_CODE_SUBAGENT_MODEL=gpt-5.6-sol",
+		"ENABLE_TOOL_SEARCH=false",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("env missing %q: %s", want, joined)
