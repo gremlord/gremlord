@@ -513,7 +513,7 @@ Entries for [The $25 Challenge](#the-25-challenge). Starts empty — winners get
 |---|---|---|---|---|
 | — | — | — | — | — |
 
-First window closes TBD (announcement date + 7 days).
+First window closes September 17, 2026 (7 days after [the announcement](https://github.com/gremlord/gremlord/discussions/29)).
 
 ## License
 
