@@ -170,13 +170,13 @@ To update later, run `gremlord update` (or `gremlord update --check` to see if o
 
 What can an agent build when the meter stops at $25? Build something real with Claude Code running through gremlord, on any model you like, for $25.00 or less in tracked spend.
 
-- Set your cap before you start: `gremlord budget set --daily 25`.
-- Build something real — a tool, a fix, a feature, a demo. A landing page alone doesn't count.
-- Enter by replying to [The $25 Challenge](https://github.com/gremlord/gremlord/discussions/29) with what you built, a link to it, and your `gremlord cost --receipt` log as the receipt.
-- Built any part of it on a passthrough profile or subscription-billed CLI delegation (Codex/Grok under your own login)? Those don't show real spend in `gremlord cost` — disclose it in your entry.
-- Local/self-hosted models don't have a metered price either — price them by hardware tier × active runtime instead (table on the site) and add it to your tracked total.
+- Cap before you start: `gremlord budget set --daily 25`. The contest total is still all-time: paste `gremlord cost --receipt` (every session, summed) and that number plus local hardware cost must be ≤ $25.00.
+- The entry must perform a function beyond presenting itself.
+- Enter by replying to [The $25 Challenge](https://github.com/gremlord/gremlord/discussions/29) with what you built, a link to it, and that receipt pasted in full.
+- Passthrough / subscription-billed CLI delegation (Codex/Grok under your own login) shows $0 in `gremlord cost`. Disclose it. Those entries are recognition-only — they cannot win the $25 bounty unless you assign them a fixed rate and include it in the total.
+- Local/self-hosted models: hardware tier × active runtime (table on the site). Active runtime is request start / model load through the final token; sum every run; round each run up to one minute. Rates assume 3-year hardware life at 50% use and $0.20/kWh.
 
-Judging is two winners, no panel: a community pick (most thumbs-up on the entry when the window closes) and a founder's pick (most impressive build under budget).
+Judging is two winners, no panel: a community pick (most thumbs-up at cutoff; founder breaks ties) and a founder's pick (most impressive build under budget).
 
 Full rules, prize, and the live leaderboard: [gremlord.com/challenge](https://gremlord.com/challenge).
 
@@ -483,7 +483,7 @@ Cross-instance messaging is native to Claude Code — sessions register under `~
 | `gremlord [-p profile] [--model alias] [-- args]` | launch Claude Code (args after `--` go to claude) |
 | `gremlord setup` | first-run config, token, statusline + peer-guidance registration |
 | `gremlord peers [name]` | find another Claude Code session to message |
-| `gremlord cost [--week\|--month] [--by model\|profile\|session] [--session id] [--receipt]` | spend report (`--receipt` is the pasteable one-session log) |
+| `gremlord cost [--week\|--month] [--by model\|profile\|session] [--session id] [--receipt]` | spend report (`--receipt` is the pasteable all-time log) |
 | `gremlord context [session-id]` | context-fullness trajectory (true vs reported tokens) |
 | `gremlord eval run/report` | paired model evaluation and artifact report |
 | `gremlord agents list/sync` | subagent definitions for your model aliases |
@@ -515,7 +515,7 @@ Entries for [The $25 Challenge](#the-25-challenge). Starts empty — winners get
 |---|---|---|---|---|
 | — | — | — | — | — |
 
-First window closes September 17, 2026 (7 days after [the announcement](https://github.com/gremlord/gremlord/discussions/29)).
+First window closes September 17, 2026 23:59:59 UTC (7 days after [the announcement](https://github.com/gremlord/gremlord/discussions/29)).
 
 ## License
 

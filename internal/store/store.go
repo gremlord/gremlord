@@ -492,6 +492,24 @@ FROM usage_events WHERE session_id = ?`, sessionID).Scan(&first, &last, &profile
 	}, true, nil
 }
 
+// AllTimeBounds is SessionBounds across every usage event.
+func (s *Store) AllTimeBounds() (SessionBounds, bool, error) {
+	var first, last, n int64
+	err := s.db.QueryRow(`SELECT COALESCE(MIN(ts),0), COALESCE(MAX(ts),0), COUNT(*)
+FROM usage_events`).Scan(&first, &last, &n)
+	if err != nil {
+		return SessionBounds{}, false, err
+	}
+	if n == 0 {
+		return SessionBounds{}, false, nil
+	}
+	return SessionBounds{
+		First:    time.Unix(first, 0),
+		Last:     time.Unix(last, 0),
+		Requests: n,
+	}, true, nil
+}
+
 // TotalSince returns total spend from `since`, optionally filtered by
 // profile ("" = all) or session ("" = all).
 func (s *Store) TotalSince(since time.Time, profile, session string) (float64, error) {

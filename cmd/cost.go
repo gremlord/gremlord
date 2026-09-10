@@ -30,8 +30,9 @@ var costCmd = &cobra.Command{
 	Long: `Spend report from the local usage log.
 
 Default is today's spend, grouped by model. --receipt prints a
-self-contained pasteable log for one session (defaults to the most
-recent) — the format the $25 Challenge asks for as a receipt.`,
+self-contained pasteable all-time log (every session, summed) — the
+format the $25 Challenge asks for as a receipt. Pass --session to
+restrict it to one session.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, dataDir, err := loadConfig()
 		if err != nil {
@@ -61,20 +62,10 @@ recent) — the format the $25 Challenge asks for as a receipt.`,
 		}
 
 		sessionID := costSession
-		if costReceipt && sessionID == "" {
-			sessionID, err = st.LatestSessionID()
-			if err != nil {
-				return err
-			}
-			if sessionID == "" {
-				return fmt.Errorf("no attributed sessions recorded yet")
-			}
-		}
-
 		if costReceipt {
-			// A receipt covers the whole session, not "today".
+			// A receipt is all-time: the contest total, or one named session.
 			since = time.Unix(0, 0)
-			label = "Session"
+			label = "All time"
 		}
 
 		rows, err := st.SpendSinceFiltered(since, costBy, sessionID)
@@ -123,12 +114,27 @@ recent) — the format the $25 Challenge asks for as a receipt.`,
 }
 
 func printReceipt(st *store.Store, sessionID string, rows []store.SpendRow) error {
-	bounds, ok, err := st.SessionBounds(sessionID)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("no usage recorded for session %q", sessionID)
+	var bounds store.SessionBounds
+	scope := "all sessions"
+	if sessionID != "" {
+		b, ok, err := st.SessionBounds(sessionID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("no usage recorded for session %q", sessionID)
+		}
+		bounds = b
+		scope = sessionID
+	} else {
+		b, ok, err := st.AllTimeBounds()
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("no usage recorded yet")
+		}
+		bounds = b
 	}
 
 	var total float64
@@ -143,15 +149,19 @@ func printReceipt(st *store.Store, sessionID string, rows []store.SpendRow) erro
 
 	fmt.Println("gremlord cost receipt")
 	fmt.Printf("gremlord %s\n", router.Version)
-	fmt.Printf("session  %s\n", sessionID)
-	if bounds.Profile != "" {
+	fmt.Printf("scope    %s\n", scope)
+	if sessionID != "" && bounds.Profile != "" {
 		fmt.Printf("profile  %s\n", bounds.Profile)
 	}
 	fmt.Printf("from     %s\n", bounds.First.Local().Format(time.RFC3339))
 	fmt.Printf("to       %s\n", bounds.Last.Local().Format(time.RFC3339))
 	fmt.Printf("requests %d\n", bounds.Requests)
 	fmt.Println()
-	fmt.Printf("%-28s %8s %8s %7s %10s\n", "model", "in", "out", "cached", "usd")
+	col := "model"
+	if sessionID == "" {
+		col = "key"
+	}
+	fmt.Printf("%-28s %8s %8s %7s %10s\n", col, "in", "out", "cached", "usd")
 	for _, r := range rows {
 		key := r.Key
 		if key == "" {
@@ -183,7 +193,7 @@ func init() {
 	costCmd.Flags().StringVar(&costSince, "since", "", "start date (YYYY-MM-DD)")
 	costCmd.Flags().StringVar(&costBy, "by", "model", "group by: model | profile | session")
 	costCmd.Flags().StringVar(&costSession, "session", "", "restrict to one session id")
-	costCmd.Flags().BoolVar(&costReceipt, "receipt", false, "pasteable one-session receipt (defaults to latest)")
+	costCmd.Flags().BoolVar(&costReceipt, "receipt", false, "pasteable all-time receipt (every session, summed)")
 	costCmd.Flags().BoolVar(&costJSON, "json", false, "machine-readable output")
 }
 
