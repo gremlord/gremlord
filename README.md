@@ -173,6 +173,7 @@ What can an agent build when the meter stops at $25? Build something real with C
 - Set your cap before you start: `gremlord budget set --daily 25`.
 - Build something real — a tool, a fix, a feature, a demo. A landing page alone doesn't count.
 - Enter by replying to [The $25 Challenge](https://github.com/gremlord/gremlord/discussions/29) with what you built, a link to it, and your `gremlord cost --receipt` log as the receipt.
+- Built any part of it on a passthrough profile or subscription-billed CLI delegation (Codex/Grok under your own login)? Those don't show real spend in `gremlord cost` — disclose it in your entry.
 
 Judging is two winners, no panel: a community pick (most thumbs-up on the entry when the window closes) and a founder's pick (most impressive build under budget).
 
