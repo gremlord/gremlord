@@ -166,6 +166,18 @@ Or from source: `go install github.com/gremlord/gremlord@latest`
 
 To update later, run `gremlord update` (or `gremlord update --check` to see if one's available without installing it). This updates gremlord itself; Claude Code keeps auto-updating on its own regardless.
 
+## The $25 Challenge
+
+What can an agent build when the meter stops at $25? Build something real with Claude Code running through gremlord, on any model you like, for $25.00 or less in tracked spend.
+
+- Set your cap before you start: `gremlord budget set --daily 25`.
+- Build something real — a tool, a fix, a feature, a demo. A landing page alone doesn't count.
+- Enter by replying to the pinned "The $25 Challenge" discussion in [gremlord/gremlord Discussions](https://github.com/gremlord/gremlord/discussions) with what you built, a link to it, and your `gremlord cost` log as the receipt.
+
+Judging is two winners, no panel: a community pick (most thumbs-up on the entry when the window closes) and a founder's pick (most impressive build under budget).
+
+Full rules, prize, and the live leaderboard: [gremlord.com/challenge](https://gremlord.com/challenge).
+
 ## Configure
 
 Everything lives in `~/.gremlord/config.yaml`, and everything is editable from the terminal:
@@ -492,6 +504,16 @@ Provider keys are referenced by environment variable name. They resolve in order
 The router binds `127.0.0.1` only and requires a per-install token (created by `setup`, mode 0600), so other local processes can't spend on your keys.
 
 CLI delegation starts a local subprocess with filesystem access in the launching session's working directory. The launcher carries that directory in `X-Gremlord-Cwd`; the backend requires an absolute existing directory before spawning anything. Codex's `--sandbox` setting controls its write scope. Treat `danger-full-access` accordingly.
+
+## Challenge leaderboard
+
+Entries for [The $25 Challenge](#the-25-challenge). Starts empty — winners get a permanent row here and on the site leaderboard.
+
+| Rank | Builder | Build | Spend | Link |
+|---|---|---|---|---|
+| — | — | — | — | — |
+
+First window closes TBD (announcement date + 7 days).
 
 ## License
 
