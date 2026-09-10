@@ -494,9 +494,20 @@ FROM usage_events WHERE session_id = ?`, sessionID).Scan(&first, &last, &profile
 
 // AllTimeBounds is SessionBounds across every usage event.
 func (s *Store) AllTimeBounds() (SessionBounds, bool, error) {
+	return s.BoundsSince(time.Unix(0, 0), "")
+}
+
+// BoundsSince is SessionBounds for events at or after `since`, optionally
+// restricted to one session_id.
+func (s *Store) BoundsSince(since time.Time, sessionID string) (SessionBounds, bool, error) {
+	q := `SELECT COALESCE(MIN(ts),0), COALESCE(MAX(ts),0), COUNT(*) FROM usage_events WHERE ts >= ?`
+	args := []any{since.Unix()}
+	if sessionID != "" {
+		q += ` AND session_id = ?`
+		args = append(args, sessionID)
+	}
 	var first, last, n int64
-	err := s.db.QueryRow(`SELECT COALESCE(MIN(ts),0), COALESCE(MAX(ts),0), COUNT(*)
-FROM usage_events`).Scan(&first, &last, &n)
+	err := s.db.QueryRow(q, args...).Scan(&first, &last, &n)
 	if err != nil {
 		return SessionBounds{}, false, err
 	}

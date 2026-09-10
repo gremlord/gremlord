@@ -170,7 +170,7 @@ To update later, run `gremlord update` (or `gremlord update --check` to see if o
 
 What can an agent build when the meter stops at $25? Build something real with Claude Code running through gremlord, on any model you like, for $25.00 or less in tracked spend.
 
-- Cap before you start: `gremlord budget set --daily 25`. The contest total is still all-time: paste `gremlord cost --receipt` (every session, summed) and that number plus local hardware cost must be ≤ $25.00.
+- Cap before you start: `gremlord budget set --daily 25`. Contest receipt is `gremlord cost --receipt --since YYYY-MM-DD` from the day you started the build (the `from` line on the paste is the window). That number plus local hardware cost must be ≤ $25.00.
 - The entry must perform a function beyond presenting itself.
 - Enter by replying to [The $25 Challenge](https://github.com/gremlord/gremlord/discussions/29) with what you built, a link to it, and that receipt pasted in full.
 - Passthrough / subscription-billed CLI delegation (Codex/Grok under your own login) shows $0 in `gremlord cost`. Disclose it. Those entries are recognition-only — they cannot win the $25 bounty unless you assign them a fixed rate and include it in the total.
@@ -483,7 +483,7 @@ Cross-instance messaging is native to Claude Code — sessions register under `~
 | `gremlord [-p profile] [--model alias] [-- args]` | launch Claude Code (args after `--` go to claude) |
 | `gremlord setup` | first-run config, token, statusline + peer-guidance registration |
 | `gremlord peers [name]` | find another Claude Code session to message |
-| `gremlord cost [--week\|--month] [--by model\|profile\|session] [--session id] [--receipt]` | spend report (`--receipt` is the pasteable all-time log) |
+| `gremlord cost [--week\|--month] [--since] [--by model\|profile\|session] [--session id] [--receipt]` | spend report (`--receipt` is the pasteable log over that window) |
 | `gremlord context [session-id]` | context-fullness trajectory (true vs reported tokens) |
 | `gremlord eval run/report` | paired model evaluation and artifact report |
 | `gremlord agents list/sync` | subagent definitions for your model aliases |

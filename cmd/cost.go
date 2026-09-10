@@ -30,9 +30,10 @@ var costCmd = &cobra.Command{
 	Long: `Spend report from the local usage log.
 
 Default is today's spend, grouped by model. --receipt prints a
-self-contained pasteable all-time log (every session, summed) — the
-format the $25 Challenge asks for as a receipt. Pass --session to
-restrict it to one session.`,
+self-contained pasteable log over the same window as the ordinary
+report (today, --week, --month, or --since). The $25 Challenge asks
+for gremlord cost --receipt --since YYYY-MM-DD from the day you
+started the build. Pass --session to restrict it to one session.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, dataDir, err := loadConfig()
 		if err != nil {
@@ -62,12 +63,6 @@ restrict it to one session.`,
 		}
 
 		sessionID := costSession
-		if costReceipt {
-			// A receipt is all-time: the contest total, or one named session.
-			since = time.Unix(0, 0)
-			label = "All time"
-		}
-
 		rows, err := st.SpendSinceFiltered(since, costBy, sessionID)
 		if err != nil {
 			return err
@@ -76,7 +71,7 @@ restrict it to one session.`,
 			return json.NewEncoder(os.Stdout).Encode(rows)
 		}
 		if costReceipt {
-			return printReceipt(st, sessionID, rows)
+			return printReceipt(st, sessionID, since, now, rows)
 		}
 
 		var total float64
@@ -113,9 +108,9 @@ restrict it to one session.`,
 	},
 }
 
-func printReceipt(st *store.Store, sessionID string, rows []store.SpendRow) error {
-	var bounds store.SessionBounds
+func printReceipt(st *store.Store, sessionID string, since, until time.Time, rows []store.SpendRow) error {
 	scope := "all sessions"
+	var profile string
 	if sessionID != "" {
 		b, ok, err := st.SessionBounds(sessionID)
 		if err != nil {
@@ -124,21 +119,12 @@ func printReceipt(st *store.Store, sessionID string, rows []store.SpendRow) erro
 		if !ok {
 			return fmt.Errorf("no usage recorded for session %q", sessionID)
 		}
-		bounds = b
 		scope = sessionID
-	} else {
-		b, ok, err := st.AllTimeBounds()
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return fmt.Errorf("no usage recorded yet")
-		}
-		bounds = b
+		profile = b.Profile
 	}
 
 	var total float64
-	var in, out, cached, unpriced int64
+	var in, out, cached, unpriced, requests int64
 	for _, r := range rows {
 		total += r.CostUSD
 		in += r.InputTokens
@@ -146,20 +132,27 @@ func printReceipt(st *store.Store, sessionID string, rows []store.SpendRow) erro
 		cached += r.CacheReadTokens
 		unpriced += r.Unpriced
 	}
+	if b, ok, err := st.BoundsSince(since, sessionID); err != nil {
+		return err
+	} else if ok {
+		requests = b.Requests
+	}
 
 	fmt.Println("gremlord cost receipt")
 	fmt.Printf("gremlord %s\n", router.Version)
 	fmt.Printf("scope    %s\n", scope)
-	if sessionID != "" && bounds.Profile != "" {
-		fmt.Printf("profile  %s\n", bounds.Profile)
+	if profile != "" {
+		fmt.Printf("profile  %s\n", profile)
 	}
-	fmt.Printf("from     %s\n", bounds.First.Local().Format(time.RFC3339))
-	fmt.Printf("to       %s\n", bounds.Last.Local().Format(time.RFC3339))
-	fmt.Printf("requests %d\n", bounds.Requests)
+	fmt.Printf("from     %s\n", since.Local().Format(time.RFC3339))
+	fmt.Printf("to       %s\n", until.Local().Format(time.RFC3339))
+	fmt.Printf("requests %d\n", requests)
 	fmt.Println()
 	col := "model"
-	if sessionID == "" {
-		col = "key"
+	if sessionID == "" && costBy == "session" {
+		col = "session"
+	} else if sessionID == "" && costBy == "profile" {
+		col = "profile"
 	}
 	fmt.Printf("%-28s %8s %8s %7s %10s\n", col, "in", "out", "cached", "usd")
 	for _, r := range rows {
@@ -193,7 +186,7 @@ func init() {
 	costCmd.Flags().StringVar(&costSince, "since", "", "start date (YYYY-MM-DD)")
 	costCmd.Flags().StringVar(&costBy, "by", "model", "group by: model | profile | session")
 	costCmd.Flags().StringVar(&costSession, "session", "", "restrict to one session id")
-	costCmd.Flags().BoolVar(&costReceipt, "receipt", false, "pasteable all-time receipt (every session, summed)")
+	costCmd.Flags().BoolVar(&costReceipt, "receipt", false, "pasteable receipt over the selected window")
 	costCmd.Flags().BoolVar(&costJSON, "json", false, "machine-readable output")
 }
 
