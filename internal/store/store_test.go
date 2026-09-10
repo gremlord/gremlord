@@ -110,6 +110,62 @@ func TestSessionUsageIncludesDuration(t *testing.T) {
 	}
 }
 
+func TestSpendSinceFilteredAndSessionBounds(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "agentic.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	at := time.Now().Truncate(time.Second)
+	for _, e := range []UsageEvent{
+		{TS: at, SessionID: "sess-a", Profile: "main", Model: "opus", InputTokens: 10, CacheReadTokens: 5, OutputTokens: 2, CostUSD: 1.25, Priced: true},
+		{TS: at.Add(time.Minute), SessionID: "sess-a", Profile: "main", Model: "haiku", InputTokens: 3, OutputTokens: 1, CostUSD: 0.10, Priced: true},
+		{TS: at, SessionID: "sess-b", Profile: "cheap", Model: "opus", InputTokens: 99, CostUSD: 9.00, Priced: true},
+	} {
+		if err := st.RecordUsage(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	all, err := st.SpendSince(at.Add(-time.Hour), "model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("unfiltered models = %+v, want opus+haiku", all)
+	}
+
+	filtered, err := st.SpendSinceFiltered(at.Add(-time.Hour), "model", "sess-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered) != 2 {
+		t.Fatalf("filtered = %+v, want two models", filtered)
+	}
+	var total float64
+	for _, r := range filtered {
+		total += r.CostUSD
+		if r.Key == "opus" && (r.CostUSD != 1.25 || r.InputTokens != 15) {
+			t.Errorf("opus row = %+v, want cost 1.25 input 15", r)
+		}
+	}
+	if total != 1.35 {
+		t.Errorf("sess-a total = %v, want 1.35", total)
+	}
+
+	bounds, ok, err := st.SessionBounds("sess-a")
+	if err != nil || !ok {
+		t.Fatalf("bounds ok=%v err=%v", ok, err)
+	}
+	if bounds.Profile != "main" || bounds.Requests != 2 || !bounds.First.Equal(at) || !bounds.Last.Equal(at.Add(time.Minute)) {
+		t.Errorf("bounds = %+v", bounds)
+	}
+	if _, ok, err := st.SessionBounds("sess-missing"); err != nil || ok {
+		t.Errorf("missing: ok=%v err=%v, want ok=false", ok, err)
+	}
+}
+
 func TestGoalDecisionRoundTrip(t *testing.T) {
 	st, err := Open(filepath.Join(t.TempDir(), "agentic.db"))
 	if err != nil {

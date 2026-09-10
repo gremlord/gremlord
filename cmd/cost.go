@@ -10,20 +10,28 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/router"
 	"github.com/gremlord/gremlord/internal/store"
 )
 
 var (
-	costWeek  bool
-	costMonth bool
-	costSince string
-	costBy    string
-	costJSON  bool
+	costWeek    bool
+	costMonth   bool
+	costSince   string
+	costBy      string
+	costJSON    bool
+	costSession string
+	costReceipt bool
 )
 
 var costCmd = &cobra.Command{
 	Use:   "cost",
 	Short: "Spend report from the local usage log",
+	Long: `Spend report from the local usage log.
+
+Default is today's spend, grouped by model. --receipt prints a
+self-contained pasteable log for one session (defaults to the most
+recent) — the format the $25 Challenge asks for as a receipt.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, dataDir, err := loadConfig()
 		if err != nil {
@@ -52,12 +60,32 @@ var costCmd = &cobra.Command{
 			since, label = since.AddDate(0, 0, -weekday), "This week"
 		}
 
-		rows, err := st.SpendSince(since, costBy)
+		sessionID := costSession
+		if costReceipt && sessionID == "" {
+			sessionID, err = st.LatestSessionID()
+			if err != nil {
+				return err
+			}
+			if sessionID == "" {
+				return fmt.Errorf("no attributed sessions recorded yet")
+			}
+		}
+
+		if costReceipt {
+			// A receipt covers the whole session, not "today".
+			since = time.Unix(0, 0)
+			label = "Session"
+		}
+
+		rows, err := st.SpendSinceFiltered(since, costBy, sessionID)
 		if err != nil {
 			return err
 		}
 		if costJSON {
 			return json.NewEncoder(os.Stdout).Encode(rows)
+		}
+		if costReceipt {
+			return printReceipt(st, sessionID, rows)
 		}
 
 		var total float64
@@ -85,7 +113,7 @@ var costCmd = &cobra.Command{
 		if unpriced > 0 {
 			fmt.Printf("  ⚠ %d requests on unpriced models (untracked spend) — add pricing in config\n", unpriced)
 		}
-		if cfg.Budgets != nil && cfg.Budgets.Daily > 0 && label == "Today" {
+		if cfg.Budgets != nil && cfg.Budgets.Daily > 0 && label == "Today" && sessionID == "" {
 			frac := total / cfg.Budgets.Daily
 			fmt.Printf("Daily budget: $%.2f / $%.2f  [%s] %.0f%%\n",
 				total, cfg.Budgets.Daily, bar(frac, 12), frac*100)
@@ -94,11 +122,68 @@ var costCmd = &cobra.Command{
 	},
 }
 
+func printReceipt(st *store.Store, sessionID string, rows []store.SpendRow) error {
+	bounds, ok, err := st.SessionBounds(sessionID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("no usage recorded for session %q", sessionID)
+	}
+
+	var total float64
+	var in, out, cached, unpriced int64
+	for _, r := range rows {
+		total += r.CostUSD
+		in += r.InputTokens
+		out += r.OutputTokens
+		cached += r.CacheReadTokens
+		unpriced += r.Unpriced
+	}
+
+	fmt.Println("gremlord cost receipt")
+	fmt.Printf("gremlord %s\n", router.Version)
+	fmt.Printf("session  %s\n", sessionID)
+	if bounds.Profile != "" {
+		fmt.Printf("profile  %s\n", bounds.Profile)
+	}
+	fmt.Printf("from     %s\n", bounds.First.Local().Format(time.RFC3339))
+	fmt.Printf("to       %s\n", bounds.Last.Local().Format(time.RFC3339))
+	fmt.Printf("requests %d\n", bounds.Requests)
+	fmt.Println()
+	fmt.Printf("%-28s %8s %8s %7s %10s\n", "model", "in", "out", "cached", "usd")
+	for _, r := range rows {
+		key := r.Key
+		if key == "" {
+			key = "(unattributed)"
+		}
+		cache := "—"
+		if r.InputTokens > 0 {
+			cache = fmt.Sprintf("%.0f%%", r.CacheHitRate()*100)
+		}
+		fmt.Printf("%-28s %8s %8s %7s %10.2f\n",
+			key, humanTokens(r.InputTokens), humanTokens(r.OutputTokens), cache, r.CostUSD)
+	}
+	fmt.Println()
+	cache := "—"
+	if in > 0 {
+		cache = fmt.Sprintf("%.0f%%", float64(cached)/float64(in)*100)
+	}
+	fmt.Printf("total    $%.2f   %s in / %s out   %s cached\n",
+		total, humanTokens(in), humanTokens(out), cache)
+	if unpriced > 0 {
+		fmt.Printf("warning  %d unpriced requests (untracked spend)\n", unpriced)
+	}
+	return nil
+}
+
 func init() {
 	costCmd.Flags().BoolVar(&costWeek, "week", false, "this ISO week")
 	costCmd.Flags().BoolVar(&costMonth, "month", false, "this calendar month")
 	costCmd.Flags().StringVar(&costSince, "since", "", "start date (YYYY-MM-DD)")
 	costCmd.Flags().StringVar(&costBy, "by", "model", "group by: model | profile | session")
+	costCmd.Flags().StringVar(&costSession, "session", "", "restrict to one session id")
+	costCmd.Flags().BoolVar(&costReceipt, "receipt", false, "pasteable one-session receipt (defaults to latest)")
 	costCmd.Flags().BoolVar(&costJSON, "json", false, "machine-readable output")
 }
 

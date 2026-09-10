@@ -422,17 +422,30 @@ func (r SpendRow) CacheHitRate() float64 {
 // SpendSince aggregates usage from `since`, grouped by "model", "profile",
 // or "session".
 func (s *Store) SpendSince(since time.Time, groupBy string) ([]SpendRow, error) {
+	return s.SpendSinceFiltered(since, groupBy, "")
+}
+
+// SpendSinceFiltered is SpendSince restricted to one session_id. An empty
+// sessionID is the unfiltered report.
+func (s *Store) SpendSinceFiltered(since time.Time, groupBy, sessionID string) ([]SpendRow, error) {
 	col := map[string]string{"model": "model", "profile": "profile", "session": "session_id"}[groupBy]
 	if col == "" {
 		return nil, fmt.Errorf("unknown grouping %q", groupBy)
 	}
-	rows, err := s.db.Query(`SELECT `+col+`,
+	q := `SELECT ` + col + `,
   COALESCE(SUM(input_tokens+cache_read_tokens+cache_write_tokens),0),
   COALESCE(SUM(output_tokens),0),
   COALESCE(SUM(cache_read_tokens),0),
   COALESCE(SUM(cost_usd),0),
   COALESCE(SUM(1-priced),0)
-FROM usage_events WHERE ts >= ? GROUP BY `+col+` ORDER BY SUM(cost_usd) DESC`, since.Unix())
+FROM usage_events WHERE ts >= ?`
+	args := []any{since.Unix()}
+	if sessionID != "" {
+		q += ` AND session_id = ?`
+		args = append(args, sessionID)
+	}
+	q += ` GROUP BY ` + col + ` ORDER BY SUM(cost_usd) DESC`
+	rows, err := s.db.Query(q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -446,6 +459,37 @@ FROM usage_events WHERE ts >= ? GROUP BY `+col+` ORDER BY SUM(cost_usd) DESC`, s
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// SessionBounds is the first and last usage timestamp for a session, plus
+// the profile that session ran under (empty if unattributed).
+type SessionBounds struct {
+	First    time.Time
+	Last     time.Time
+	Profile  string
+	Requests int64
+}
+
+// SessionBounds returns the time span of a session's usage. ok is false
+// when no events exist for that id.
+func (s *Store) SessionBounds(sessionID string) (SessionBounds, bool, error) {
+	var first, last, n int64
+	var profile string
+	err := s.db.QueryRow(`SELECT COALESCE(MIN(ts),0), COALESCE(MAX(ts),0),
+  COALESCE(MAX(profile),''), COUNT(*)
+FROM usage_events WHERE session_id = ?`, sessionID).Scan(&first, &last, &profile, &n)
+	if err != nil {
+		return SessionBounds{}, false, err
+	}
+	if n == 0 {
+		return SessionBounds{}, false, nil
+	}
+	return SessionBounds{
+		First:    time.Unix(first, 0),
+		Last:     time.Unix(last, 0),
+		Profile:  profile,
+		Requests: n,
+	}, true, nil
 }
 
 // TotalSince returns total spend from `since`, optionally filtered by

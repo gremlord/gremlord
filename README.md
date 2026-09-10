@@ -172,7 +172,7 @@ What can an agent build when the meter stops at $25? Build something real with C
 
 - Set your cap before you start: `gremlord budget set --daily 25`.
 - Build something real — a tool, a fix, a feature, a demo. A landing page alone doesn't count.
-- Enter by replying to the pinned "The $25 Challenge" discussion in [gremlord/gremlord Discussions](https://github.com/gremlord/gremlord/discussions) with what you built, a link to it, and your `gremlord cost` log as the receipt.
+- Enter by replying to [The $25 Challenge](https://github.com/gremlord/gremlord/discussions/29) with what you built, a link to it, and your `gremlord cost --receipt` log as the receipt.
 
 Judging is two winners, no panel: a community pick (most thumbs-up on the entry when the window closes) and a founder's pick (most impressive build under budget).
 
@@ -481,7 +481,7 @@ Cross-instance messaging is native to Claude Code — sessions register under `~
 | `gremlord [-p profile] [--model alias] [-- args]` | launch Claude Code (args after `--` go to claude) |
 | `gremlord setup` | first-run config, token, statusline + peer-guidance registration |
 | `gremlord peers [name]` | find another Claude Code session to message |
-| `gremlord cost [--week\|--month] [--by model\|profile\|session]` | spend report |
+| `gremlord cost [--week\|--month] [--by model\|profile\|session] [--session id] [--receipt]` | spend report (`--receipt` is the pasteable one-session log) |
 | `gremlord context [session-id]` | context-fullness trajectory (true vs reported tokens) |
 | `gremlord eval run/report` | paired model evaluation and artifact report |
 | `gremlord agents list/sync` | subagent definitions for your model aliases |
