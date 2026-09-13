@@ -2,7 +2,6 @@ package openaibe
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/gremlord/gremlord/internal/anthropic"
 	"github.com/gremlord/gremlord/internal/config"
@@ -156,29 +155,29 @@ func translateResponsesMessage(msg anthropic.Message) ([]openai.ResponsesInputIt
 		for _, b := range msg.Content {
 			switch b.Type {
 			case "tool_result":
-				content := b.FlatText()
-				if strings.TrimSpace(content) == "" {
-					content = "(no output)"
-				}
-				if b.IsError {
-					content = "Error: " + content
-				}
+				content, images := toolResultText(b)
 				out = append(out, openai.ResponsesInputItem{
 					Type:   "function_call_output",
 					CallID: b.ToolUseID,
 					Output: content,
 				})
+				// FileRead nests pixels inside tool_result;
+				// function_call_output.output is a string, so hoist
+				// them onto the trailing user message as input_image.
+				for _, src := range images {
+					if url := src.DataURL(); url != "" {
+						parts = append(parts, openai.ResponsesContentPart{Type: "input_image", ImageURL: url})
+					}
+				}
 			case "text":
 				parts = append(parts, openai.ResponsesContentPart{Type: "input_text", Text: b.Text})
 			case "image":
 				if b.Source == nil {
 					continue
 				}
-				url := b.Source.URL
-				if b.Source.Type == "base64" {
-					url = fmt.Sprintf("data:%s;base64,%s", b.Source.MediaType, b.Source.Data)
+				if url := b.Source.DataURL(); url != "" {
+					parts = append(parts, openai.ResponsesContentPart{Type: "input_image", ImageURL: url})
 				}
-				parts = append(parts, openai.ResponsesContentPart{Type: "input_image", ImageURL: url})
 			}
 		}
 		if len(parts) > 0 {

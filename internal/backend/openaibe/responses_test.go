@@ -119,6 +119,47 @@ func TestResponsesImageTranslation(t *testing.T) {
 	}
 }
 
+// gpt-6-astra (api: responses) was the live miss: FileRead's nested image
+// flattened to "[image omitted from tool result …]" and never became
+// input_image.
+func TestResponsesToolResultImageIsHoisted(t *testing.T) {
+	body := `{"model":"gpt-6-astra","max_tokens":10,"messages":[
+	  {"role":"user","content":"look at shot.webp"},
+	  {"role":"assistant","content":[
+	    {"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"shot.webp"}}
+	  ]},
+	  {"role":"user","content":[
+	    {"type":"tool_result","tool_use_id":"toolu_1","content":[
+	      {"type":"image","source":{"type":"base64","media_type":"image/webp","data":"UklGR"}}
+	    ]}
+	  ]}
+	]}`
+	out, err := TranslateResponsesRequest(parseReq(t, body), responsesRoute(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	types := []string{}
+	for _, item := range out.Input {
+		types = append(types, item.Type)
+	}
+	if strings.Join(types, ",") != "message,function_call,function_call_output,message" {
+		t.Fatalf("input types = %v", types)
+	}
+	if out.Input[2].CallID != "toolu_1" || out.Input[2].Output != "[image]" {
+		t.Errorf("function_call_output: %+v", out.Input[2])
+	}
+	if strings.Contains(out.Input[2].Output, "omitted") {
+		t.Errorf("output still omits the image: %q", out.Input[2].Output)
+	}
+	parts, ok := out.Input[3].Content.([]openai.ResponsesContentPart)
+	if !ok || len(parts) != 1 {
+		t.Fatalf("trailing user: %+v", out.Input[3].Content)
+	}
+	if parts[0].Type != "input_image" || parts[0].ImageURL != "data:image/webp;base64,UklGR" {
+		t.Errorf("hoisted image: %+v", parts[0])
+	}
+}
+
 func TestResponsesResponseTranslation(t *testing.T) {
 	resp := &openai.ResponsesResponse{
 		ID:     "resp_abc",
