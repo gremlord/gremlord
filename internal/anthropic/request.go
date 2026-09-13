@@ -111,7 +111,20 @@ type ContentBlock struct {
 }
 
 // FlatText renders a tool_result's content (string or blocks) as text.
+// Nested images become an omission marker — translators that can hoist
+// them (openaibe) should use ContentText + ImageSources instead.
 func (b ContentBlock) FlatText() string {
+	return b.contentText(true)
+}
+
+// ContentText is FlatText with image blocks skipped rather than replaced
+// by an omission marker. Pair with ImageSources when the translator can
+// forward those pixels as a trailing user image message.
+func (b ContentBlock) ContentText() string {
+	return b.contentText(false)
+}
+
+func (b ContentBlock) contentText(markImages bool) string {
 	out := ""
 	for _, c := range b.Content {
 		switch c.Type {
@@ -121,6 +134,9 @@ func (b ContentBlock) FlatText() string {
 			}
 			out += c.Text
 		case "image":
+			if !markImages {
+				continue
+			}
 			out += fmt.Sprintf("\n[image omitted from tool result %s]", b.ToolUseID)
 		case "tool_reference":
 			// Deferred tool loading: Claude Code answers its own ToolSearch
@@ -143,11 +159,34 @@ func (b ContentBlock) FlatText() string {
 	return out
 }
 
+// ImageSources returns nested image sources from a tool_result's content.
+func (b ContentBlock) ImageSources() []*ImageSource {
+	var out []*ImageSource
+	for _, c := range b.Content {
+		if c.Type == "image" && c.Source != nil {
+			out = append(out, c.Source)
+		}
+	}
+	return out
+}
+
 type ImageSource struct {
 	Type      string `json:"type"` // base64 | url
 	MediaType string `json:"media_type,omitempty"`
 	Data      string `json:"data,omitempty"`
 	URL       string `json:"url,omitempty"`
+}
+
+// DataURL is the OpenAI-shaped image URL: a data: URI for base64 sources,
+// otherwise the remote URL.
+func (s *ImageSource) DataURL() string {
+	if s == nil {
+		return ""
+	}
+	if s.Type == "base64" {
+		return fmt.Sprintf("data:%s;base64,%s", s.MediaType, s.Data)
+	}
+	return s.URL
 }
 
 // Tool is a user-defined tool. Anthropic server tools carry a versioned

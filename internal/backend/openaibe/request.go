@@ -6,7 +6,6 @@ package openaibe
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/gremlord/gremlord/internal/anthropic"
 	"github.com/gremlord/gremlord/internal/config"
@@ -187,31 +186,26 @@ func translateMessage(msg anthropic.Message) ([]openai.ChatMessage, error) {
 		for _, b := range msg.Content {
 			switch b.Type {
 			case "tool_result":
-				content := b.FlatText()
-				// ChatMessage.Content is `any` with omitempty, so an empty
-				// string drops the key and the tool message arrives with no
-				// content at all — which OpenAI-dialect servers reject. A
-				// tool can legitimately return nothing (a Bash command with
-				// no stdout, an empty content array, block types this
-				// translation does not render), so say that instead.
-				if strings.TrimSpace(content) == "" {
-					content = "(no output)"
-				}
-				if b.IsError {
-					content = "Error: " + content
-				}
+				content, images := toolResultText(b)
 				out = append(out, openai.ChatMessage{Role: "tool", ToolCallID: b.ToolUseID, Content: content})
+				// FileRead (and MCP image tools) nest pixels inside
+				// tool_result. OpenAI tool messages are text-only, so
+				// hoist them onto the trailing user message as image_url
+				// — same shape as a pasted/attached top-level image.
+				for _, src := range images {
+					if url := src.DataURL(); url != "" {
+						parts = append(parts, openai.ContentPart{Type: "image_url", ImageURL: &openai.ImageURL{URL: url}})
+					}
+				}
 			case "text":
 				parts = append(parts, openai.ContentPart{Type: "text", Text: b.Text})
 			case "image":
 				if b.Source == nil {
 					continue
 				}
-				url := b.Source.URL
-				if b.Source.Type == "base64" {
-					url = fmt.Sprintf("data:%s;base64,%s", b.Source.MediaType, b.Source.Data)
+				if url := b.Source.DataURL(); url != "" {
+					parts = append(parts, openai.ContentPart{Type: "image_url", ImageURL: &openai.ImageURL{URL: url}})
 				}
-				parts = append(parts, openai.ContentPart{Type: "image_url", ImageURL: &openai.ImageURL{URL: url}})
 			}
 		}
 		if len(parts) > 0 {

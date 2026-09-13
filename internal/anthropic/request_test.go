@@ -55,3 +55,34 @@ func TestFlatTextMixedContent(t *testing.T) {
 		t.Errorf("FlatText() = %q", got)
 	}
 }
+
+func TestContentTextSkipsImages(t *testing.T) {
+	block := ContentBlock{
+		Type:      "tool_result",
+		ToolUseID: "toolu_1",
+		Content: MessageBody{
+			{Type: "text", Text: "1280x720"},
+			{Type: "image", Source: &ImageSource{Type: "base64", MediaType: "image/webp", Data: "UklGR"}},
+		},
+	}
+	if got := block.FlatText(); !strings.Contains(got, "image omitted from tool result toolu_1") {
+		t.Errorf("FlatText() = %q, want omission marker", got)
+	}
+	if got := block.ContentText(); got != "1280x720" {
+		t.Errorf("ContentText() = %q, want text only", got)
+	}
+	srcs := block.ImageSources()
+	if len(srcs) != 1 || srcs[0].DataURL() != "data:image/webp;base64,UklGR" {
+		t.Errorf("ImageSources() = %+v", srcs)
+	}
+}
+
+func TestImageSourceDataURL(t *testing.T) {
+	if got := (*ImageSource)(nil).DataURL(); got != "" {
+		t.Errorf("nil DataURL = %q", got)
+	}
+	url := (&ImageSource{Type: "url", URL: "https://ex/a.png"}).DataURL()
+	if url != "https://ex/a.png" {
+		t.Errorf("url DataURL = %q", url)
+	}
+}

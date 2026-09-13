@@ -178,6 +178,79 @@ func TestImageTranslation(t *testing.T) {
 	}
 }
 
+// FileRead nests the pixels inside tool_result. OpenAI tool messages are
+// text-only, so the image has to ride a trailing user message.
+func TestToolResultImageIsHoisted(t *testing.T) {
+	body := `{"model":"gpt","max_tokens":10,"messages":[
+	  {"role":"user","content":"look at shot.webp"},
+	  {"role":"assistant","content":[
+	    {"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"shot.webp"}}
+	  ]},
+	  {"role":"user","content":[
+	    {"type":"tool_result","tool_use_id":"toolu_1","content":[
+	      {"type":"image","source":{"type":"base64","media_type":"image/webp","data":"UklGR"}}
+	    ]}
+	  ]}
+	]}`
+	out, err := TranslateRequest(parseReq(t, body), route("", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	roles := []string{}
+	for _, m := range out.Messages {
+		roles = append(roles, m.Role)
+	}
+	if strings.Join(roles, ",") != "user,assistant,tool,user" {
+		t.Fatalf("roles = %v", roles)
+	}
+	tool := out.Messages[2]
+	if tool.ToolCallID != "toolu_1" || tool.Content != "[image]" {
+		t.Errorf("tool message: %+v", tool)
+	}
+	if strings.Contains(fmt.Sprint(tool.Content), "omitted") {
+		t.Errorf("tool message still omits the image: %+v", tool)
+	}
+	parts, ok := out.Messages[3].Content.([]openai.ContentPart)
+	if !ok || len(parts) != 1 {
+		t.Fatalf("trailing user: %+v", out.Messages[3].Content)
+	}
+	if parts[0].Type != "image_url" || parts[0].ImageURL.URL != "data:image/webp;base64,UklGR" {
+		t.Errorf("hoisted image: %+v", parts[0])
+	}
+}
+
+func TestToolResultImageKeepsSiblingText(t *testing.T) {
+	body := `{"model":"gpt","max_tokens":10,"messages":[
+	  {"role":"user","content":[
+	    {"type":"tool_result","tool_use_id":"toolu_1","content":[
+	      {"type":"text","text":"1280x720 webp"},
+	      {"type":"image","source":{"type":"base64","media_type":"image/jpeg","data":"/9j/"}}
+	    ]},
+	    {"type":"text","text":"now describe it"}
+	  ]}
+	]}`
+	out, err := TranslateRequest(parseReq(t, body), route("", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Messages) != 2 {
+		t.Fatalf("messages: %+v", out.Messages)
+	}
+	if out.Messages[0].Content != "1280x720 webp" {
+		t.Errorf("tool text: %v", out.Messages[0].Content)
+	}
+	parts, ok := out.Messages[1].Content.([]openai.ContentPart)
+	if !ok || len(parts) != 2 {
+		t.Fatalf("trailing user: %+v", out.Messages[1].Content)
+	}
+	if parts[0].Type != "image_url" || parts[0].ImageURL.URL != "data:image/jpeg;base64,/9j/" {
+		t.Errorf("image part: %+v", parts[0])
+	}
+	if parts[1].Type != "text" || parts[1].Text != "now describe it" {
+		t.Errorf("text part: %+v", parts[1])
+	}
+}
+
 func TestResponseTranslation(t *testing.T) {
 	resp := &openai.ChatResponse{
 		ID: "chatcmpl-abc",
