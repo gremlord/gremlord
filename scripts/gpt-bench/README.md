@@ -80,3 +80,31 @@ inside the private artifact home to support resume; Claude history and the
 translator's in-memory replay cache remain live across turns. Inspect every
 `turn-*/grade.json`, not just the final candidate score: a later fix must not
 erase an earlier failed stage. This scenario still does not force compaction.
+
+## Execution profile A/B test inside Claude Code
+
+Both arms below run Claude Code through the current backend. The only treatment
+is the versioned `gpt-efficient-v1` supplement. The baseline explicitly disables
+any execution profile configured on the selected model. Model and effort stay
+identical; native Codex remains available as a separate reference arm.
+
+```sh
+/tmp/gremlord-gpt-bench-multiturn \
+  -baseline gremlord -mut gpt-efficient \
+  -manifest .gremlord/evals/queue-fixtures-RUN/manifest.yaml \
+  -sequence .gremlord/evals/queue-fixtures-RUN/sequence.json \
+  -out .gremlord/evals/profile-results-RUN -attempts 2 -timeout 25m
+python3 scripts/gpt-bench/sequence_report.py .gremlord/evals/profile-results-RUN
+```
+
+Generate the separate planner workflow with
+`python3 scripts/gpt-bench/planner.py prepare .gremlord/evals/planner-fixtures-RUN`,
+then use that directory's manifest and sequence in the same command. Freeze
+the profile before running it. Do not tune on its results and still call it
+held out. `sequence_report.py` aggregates repeated attempts and retains missing
+and failed stages, including time spent on execution failures.
+
+The meter records instruction/tool hashes, serialized byte sizes, response-header
+time, and first output-delta time in addition to usage. It asserts the selected
+profile reached the API. The profile text/hash and executable hash are saved in
+the run directory. See [the profile documentation](../../docs/gpt-execution-profile.md).

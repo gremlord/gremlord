@@ -87,7 +87,7 @@ func TestExecutionProfileDoesNotAffectChat(t *testing.T) {
 	route := responsesRoute("effort")
 	route.Model.API = config.APIChatCompletions
 	route.Model.ExecutionProfile = "gpt-efficient-v1"
-	applyExecutionProfile(req, route)
+	ApplyExecutionProfile(req, route)
 	if req.System.Text() != "base" {
 		t.Fatal("Responses-only profile leaked into Chat Completions")
 	}

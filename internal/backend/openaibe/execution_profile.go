@@ -19,8 +19,11 @@ For implementation work:
 - Once the requested work is complete and the relevant checks pass on the final code, report the result and stop. If something remains incomplete or unverified, say exactly what it is; do not claim success or silently omit requirements to save time.
 </gremlord_execution_profile>`
 
-func applyExecutionProfile(req *anthropic.MessagesRequest, route config.Resolved) {
-	if route.APIFlavor() != config.APIResponses || route.Model.ExecutionProfile != "gpt-efficient-v1" {
+// ApplyExecutionProfile appends the opted-in supplement to a freshly parsed
+// request. The router uses the same operation for its pre-dispatch size guard;
+// the backend applies it to its own parsed copy before translation/counting.
+func ApplyExecutionProfile(req *anthropic.MessagesRequest, route config.Resolved) {
+	if route.Provider.Type != config.ProviderOpenAI || route.APIFlavor() != config.APIResponses || route.Model.ExecutionProfile != "gpt-efficient-v1" {
 		return
 	}
 	req.System = append(req.System, anthropic.ContentBlock{Type: "text", Text: GPTEfficientPrompt})

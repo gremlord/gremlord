@@ -197,6 +197,7 @@ func (s *Server) handleMessages(countTokens bool) http.HandlerFunc {
 		var comp tokens.Composition
 		if !countTokens {
 			if req, perr := anthropic.ParseRequest(raw); perr == nil {
+				openaibe.ApplyExecutionProfile(req, route)
 				comp = tokens.Compose(req)
 				if overflow, required, budget := promptTooLong(route, req, calib); overflow {
 					msg := fmt.Sprintf("gremlord: request too large for model %q context budget "+
