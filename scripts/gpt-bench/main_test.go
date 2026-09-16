@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,10 +15,42 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gremlord/gremlord/internal/backend/openaibe"
 	"github.com/gremlord/gremlord/internal/config"
 	"github.com/gremlord/gremlord/internal/pricing"
 	"github.com/gremlord/gremlord/internal/store"
 )
+
+func TestBenchmarkRouteOverrideAndBudget(t *testing.T) {
+	configured := config.Resolved{Provider: config.Provider{Type: config.ProviderOpenAI}, Model: config.Model{ContextWindow: 500000, ExecutionProfile: "gpt-efficient-v1"}}
+	if _, err := benchmarkRoute(configured, "", 600000); err == nil {
+		t.Fatal("silently changed a Chat Completions route")
+	}
+	route, err := benchmarkRoute(configured, config.APIResponses, 600000)
+	if err != nil || route.APIFlavor() != config.APIResponses || route.Model.ContextBudget() != 500000 || route.Model.ExecutionProfile != "" || route.Model.ReasoningEffort != "high" {
+		t.Fatalf("bad benchmark route: %+v %v", route, err)
+	}
+	if configured.Model.API != "" || configured.Model.EffectiveContext != 0 || configured.Model.ExecutionProfile != "gpt-efficient-v1" {
+		t.Fatal("changed caller's configured route")
+	}
+	route.Model.ContextWindow = 1050000
+	for _, budget := range []int{600000, 300000} {
+		got, err := benchmarkRoute(route, "", budget)
+		if err != nil || got.Model.ContextBudget() != budget {
+			t.Fatalf("budget %d: %+v %v", budget, got, err)
+		}
+	}
+	if _, err := benchmarkRoute(route, "", 0); err == nil {
+		t.Fatal("accepted zero budget")
+	}
+	if _, err := benchmarkRoute(route, config.APIChatCompletions, 600000); err == nil {
+		t.Fatal("accepted unsupported override")
+	}
+	route.Provider.Type = config.ProviderAnthropic
+	if _, err := benchmarkRoute(route, config.APIResponses, 600000); err == nil {
+		t.Fatal("overrode a non-OpenAI-compatible provider")
+	}
+}
 
 // The shared meter is part of the experiment: verify that it preserves the
 // wire payload, keeps credentials out of artifacts, and counts cached input
@@ -116,6 +149,72 @@ func TestMeterUnterminatedStreamIsAnError(t *testing.T) {
 	}
 }
 
+func TestExecutionProfileArmsAndTelemetry(t *testing.T) {
+	if validateArms("gremlord", "gpt-efficient") != nil || validateArms("codex", "gpt-efficient") != nil || validateArms("typo", "gremlord") == nil || validateArms("gremlord", "gremlord") == nil {
+		t.Fatal("invalid arm selection")
+	}
+	for _, arm := range []string{"gremlord", "gpt-efficient"} {
+		t.Run(arm, func(t *testing.T) {
+			up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "text/event-stream")
+				fmt.Fprint(w, "data: {\"type\":\"response.created\"}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"ok\"}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n")
+			}))
+			defer up.Close()
+			p, logPath := testProxy(t, up.URL)
+			p.arms["session"] = arm
+			for _, withProfile := range []bool{false, true} {
+				instructions := "PRIVATE_SYSTEM"
+				if withProfile {
+					instructions += openaibe.GPTEfficientPrompt
+				}
+				payload := map[string]any{"model": "sol", "reasoning": map[string]string{"effort": "high"}, "instructions": instructions, "tools": []any{}, "input": []any{map[string]string{"type": "reasoning", "encrypted_content": "PRIVATE_CIPHER"}, map[string]string{"type": "message", "content": "PRIVATE_VISIBLE"}}}
+				data, _ := json.Marshal(payload)
+				req := httptest.NewRequest("POST", "/upstream/session/v1/responses", bytes.NewReader(data))
+				req.Header.Set("Authorization", "Bearer test-token")
+				rec := httptest.NewRecorder()
+				p.ServeHTTP(rec, req)
+				want := 200
+				if withProfile != (arm == "gpt-efficient") {
+					want = 400
+				}
+				if rec.Code != want {
+					t.Fatalf("profile=%v code=%d want=%d", withProfile, rec.Code, want)
+				}
+			}
+			data, _ := os.ReadFile(logPath)
+			for _, private := range []string{"PRIVATE_SYSTEM", "PRIVATE_CIPHER", "PRIVATE_VISIBLE", openaibe.GPTEfficientPrompt} {
+				if bytes.Contains(data, []byte(private)) {
+					t.Fatal("telemetry exposed request content")
+				}
+			}
+			for _, line := range bytes.Split(bytes.TrimSpace(data), []byte{'\n'}) {
+				var m measurement
+				json.Unmarshal(line, &m)
+				if m.Status == 200 && (m.FirstOutputMS == nil || m.VisibleInputBytes == 0 || len(m.InstructionsSHA256) != 64) {
+					t.Fatalf("missing telemetry: %+v", m)
+				}
+			}
+		})
+	}
+}
+
+func TestPromptComponentMeasurements(t *testing.T) {
+	var hashes []string
+	for _, supplement := range []string{"", "\n\n" + openaibe.GPTEfficientPrompt} {
+		body := map[string]json.RawMessage{"tools": json.RawMessage(`[{"description":"read safely","parameters":{"type":"object"}}]`), "input": json.RawMessage(`[{"type":"reasoning","encrypted_content":"excluded"}]`)}
+		body["instructions"], _ = json.Marshal("base instructions" + supplement)
+		var m measurement
+		measureInput(body, &m)
+		if m.ToolCount != 1 || m.ToolDescriptionBytes != len("read safely") || m.ToolParameterBytes != len(`{"type":"object"}`) || m.VisibleInputBytes != 0 {
+			t.Fatalf("wrong component sizes: %+v", m)
+		}
+		hashes = append(hashes, m.BaseInstructionsSHA256)
+	}
+	if hashes[0] != hashes[1] {
+		t.Fatal("base prompt comparison includes the treatment")
+	}
+}
+
 func testProxy(t *testing.T, url string) (*proxy, string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -131,4 +230,40 @@ func testProxy(t *testing.T, url string) (*proxy, string) {
 	}
 	t.Cleanup(func() { log.Close() })
 	return &proxy{route: config.Resolved{Provider: config.Provider{BaseURL: url}, Model: config.Model{ID: "sol"}}, key: "REAL_TEST_KEY", token: "test-token", client: http.DefaultClient, store: db, prices: pricing.Load(dir, nil), log: log, arms: map[string]string{"session": "codex"}, counts: map[string]int{}}, path
+}
+
+func TestMeterPricesCacheWritesWithoutDoubleCounting(t *testing.T) {
+	for _, stream := range []bool{false, true} {
+		t.Run(fmt.Sprint(stream), func(t *testing.T) {
+			response := `{"status":"completed","service_tier":"default","usage":{"input_tokens":1000,"output_tokens":80,"input_tokens_details":{"cached_tokens":900,"cache_write_tokens":60}}}`
+			up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if stream {
+					w.Header().Set("Content-Type", "text/event-stream")
+					fmt.Fprintf(w, "data: {\"type\":\"response.completed\",\"response\":%s}\n\n", response)
+				} else {
+					io.WriteString(w, response)
+				}
+			}))
+			defer up.Close()
+			p, path := testProxy(t, up.URL)
+			p.prices = pricing.Load(t.TempDir(), &config.Config{Pricing: map[string]config.Price{"sol": {Input: 10, CacheRead: 1, CacheWrite: 12.5, Output: 50}}})
+			req := httptest.NewRequest("POST", "/upstream/session/v1/responses", strings.NewReader(`{"model":"sol","reasoning":{"effort":"high"},"service_tier":"auto"}`))
+			req.Header.Set("Authorization", "Bearer test-token")
+			p.ServeHTTP(httptest.NewRecorder(), req)
+			data, _ := os.ReadFile(path)
+			var m measurement
+			json.Unmarshal(bytes.TrimSpace(data), &m)
+			if m.CacheWrite != 60 || !m.CacheWriteReported || m.ServiceTier != "default" || m.RequestedServiceTier != "auto" {
+				t.Fatalf("lost cache write/tier telemetry: %+v", m)
+			}
+			rows, err := p.store.SessionUsage("session")
+			if err != nil || len(rows) != 1 {
+				t.Fatalf("usage rows: %v %v", rows, err)
+			}
+			u := rows[0]
+			if u.InputTokens != 40 || u.CacheReadTokens != 900 || u.CacheWriteTokens != 60 || math.Abs(u.CostUSD-.00605) > 1e-10 {
+				t.Fatalf("wrong billing partitions: %+v", u)
+			}
+		})
+	}
 }

@@ -135,6 +135,11 @@ The CLI equivalent for the new setting is `--reasoning-effort high` alongside
 `--reasoning effort` in `gremlord models add`. Omit the override to honor client
 effort, falling back to the legacy thinking budget when absent.
 
+An optional `execution_profile: gpt-efficient-v1` supplements the client's
+instructions for a Responses model. It stays off unless explicitly configured;
+see the [execution profile experiment](gpt-execution-profile.md) for scope,
+configuration, and evaluation details.
+
 Regression coverage includes interleaved calls, late IDs, authoritative final
 arguments, three-turn reasoning/phase replay, JSON/SSE/terminal-only providers,
 session and route isolation, compaction reset, byte/entry/TTL eviction,

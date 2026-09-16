@@ -29,8 +29,9 @@ func newSizedServer(t *testing.T, reachedUpstream *bool) *httptest.Server {
 	cfg := &config.Config{
 		Providers: map[string]config.Provider{"fake": {Type: config.ProviderOpenAI, BaseURL: upstream.URL}},
 		Models: map[string]config.Model{
-			"tiny":    {Provider: "fake", ID: "tiny-up", ContextWindow: 1000},
-			"unknown": {Provider: "fake", ID: "unknown-up"}, // no budget
+			"tiny":        {Provider: "fake", ID: "tiny-up", ContextWindow: 1000},
+			"tiny-guided": {Provider: "fake", ID: "tiny-guided-up", ContextWindow: 1000, API: config.APIResponses, ExecutionProfile: "gpt-efficient-v1"},
+			"unknown":     {Provider: "fake", ID: "unknown-up"}, // no budget
 		},
 		Profiles: map[string]config.Profile{"main": {Model: "tiny"}},
 	}
@@ -46,6 +47,22 @@ func newSizedServer(t *testing.T, reachedUpstream *bool) *httptest.Server {
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts
+}
+
+func TestExecutionProfileIncludedInSizeGuard(t *testing.T) {
+	reached := false
+	ts := newSizedServer(t, &reached)
+	content := strings.Repeat("x", 2000)
+	resp, body := post(t, ts.URL+"/v1/messages", testToken,
+		`{"model":"tiny-guided","max_tokens":50,"messages":[{"role":"user","content":"`+content+`"}]}`)
+	if resp.StatusCode != 400 || !strings.Contains(body, "context budget") || reached {
+		t.Fatalf("profile overflow not stopped: status=%d reached=%v body=%s", resp.StatusCode, reached, body)
+	}
+	resp, body = post(t, ts.URL+"/v1/messages", testToken,
+		`{"model":"tiny","max_tokens":50,"messages":[{"role":"user","content":"`+content+`"}]}`)
+	if resp.StatusCode != 200 || !reached {
+		t.Fatalf("same input without profile should fit: status=%d body=%s", resp.StatusCode, body)
+	}
 }
 
 func TestPromptTooLongGuard(t *testing.T) {

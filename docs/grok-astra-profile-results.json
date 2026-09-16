@@ -1,0 +1,3353 @@
+{
+  "measured_date": "2026-09-16",
+  "scope": "Two synthetic workflows, three cumulative user turns; not general parity or compaction evidence.",
+  "cost_method": "Estimated API USD: ordinary input = input - cache reads - writes. Reasoning is included in output. Missing terminal usage makes spend a lower bound.",
+  "comparison_direction": "mut / baseline; ratios omitted unless both complete every checkpoint and final grade.",
+  "caveats": [
+    "Grok queue attempt 1 uses Claude 2.1.271 for profile and 2.1.273 for baseline. The remaining queue candidates use 2.1.273. Attribution-line hashes differ; tool schemas match.",
+    "All later scored runs pin Claude 2.1.271 and Codex 0.154.0.",
+    "Grok queue used the earlier meter without a cache-write counter; ordinary/write rates are equal, so the cost estimate is unchanged.",
+    "Grok planner v1 was interrupted by scheduler shutdown, retained separately, and fully replaced by v2. At least $1.010294 was recorded in the interrupted pair.",
+    "Astra profile queue baseline attempt 2 timed out during validation. Its stopped patch passed the phase-3 external grader afterward on a copy; the original score is unchanged.",
+    "Initial Astra native queue/planner v1 directories lacked the Codex companion host. Both were interrupted and excluded; recorded spend is at least $5.476761 and $0.1309105. Full replacements use the complete pinned bundle after a resumed file-editing preflight.",
+    "Native planner v2 was affected by macOS suspension and one missing terminal usage record. Both candidates passed3/3, but the pair is excluded; recorded spend is at least $3.968255. Replacement v3 uses a temporary idle-sleep inhibitor and independent clock checks.",
+    "Four short preflights are retained privately and excluded from scored performance.",
+    "Responses Lite encodes native instructions/tools differently; zero ordinary instruction/tool byte counters are not evidence that native Codex has no instructions or tools.",
+    "Fresh client homes do not reset provider caches."
+  ],
+  "excluded_runs": [
+    {
+      "directory": "grok46-profile-planner-v1",
+      "model": "grok-4.6",
+      "baseline": "gremlord",
+      "mut": "gpt-efficient",
+      "task": "planner",
+      "attempts": 1,
+      "source_revision": "4d584adcc9ac7d6aa34566e63fc69a54a1b17b09",
+      "comparison": "profile",
+      "reason": "Agent stopped the scheduler to pin CLIs; exec process cleanup also terminated its active benchmark child during profile turn2. Infrastructure interruption, not a model failure. All original artifacts retained; complete pair rerun in v2."
+    },
+    {
+      "directory": "astra-native-queue-v1",
+      "model": "gpt-6-astra",
+      "baseline": "codex",
+      "mut": "gremlord",
+      "task": "queue",
+      "attempts": 2,
+      "source_revision": "4d584adcc9ac7d6aa34566e63fc69a54a1b17b09",
+      "cache_write_price_override": 12.5,
+      "comparison": "native",
+      "reason": "Pinned Codex executable was copied without codex-code-mode-host; native tools failed closed. The agent stopped the invalid run during native turn 3. Entire comparison excluded, artifacts and recorded spend retained; full pair repetitions will rerun with the complete pinned bundle after a tool-using preflight.",
+      "recorded_estimated_usd": 5.476761,
+      "cost_is_lower_bound": true,
+      "completed_requests": 37
+    },
+    {
+      "directory": "astra-native-planner-v1",
+      "model": "gpt-6-astra",
+      "baseline": "codex",
+      "mut": "gremlord",
+      "task": "planner",
+      "attempts": 1,
+      "source_revision": "4d584adcc9ac7d6aa34566e63fc69a54a1b17b09",
+      "cache_write_price_override": 12.5,
+      "comparison": "native",
+      "reason": "The prior scheduler automatically advanced before the missing Codex companion was copied. Startup recorded code mode unavailable; agent stopped scheduler and child. Entire run excluded and retained; full replacement uses complete pinned bundle after preflight.",
+      "recorded_estimated_usd": 0.1309105,
+      "cost_is_lower_bound": true
+    },
+    {
+      "directory": "astra-native-planner-v2",
+      "model": "gpt-6-astra",
+      "baseline": "codex",
+      "mut": "gremlord",
+      "task": "planner",
+      "attempts": 1,
+      "source_revision": "4d584adcc9ac7d6aa34566e63fc69a54a1b17b09",
+      "cache_write_price_override": 12.5,
+      "comparison": "native",
+      "reason": "macOS suspended during Gremlord planner turn2, with multiple 9-17 minute timestamp gaps despite a 251s monotonic duration. kern.sleeptime/waketime confirm sleep. Both candidates passed3/3 but one Gremlord API stream lacks terminal usage; timing/cost cannot support a clean paired comparison. Entire pair retained and excluded; rerun under task-scoped caffeinate -i.",
+      "cost_is_lower_bound": true,
+      "recorded_estimated_usd": 3.9682549999999996
+    }
+  ],
+  "unscored_preflights": [
+    "grok46-profile-preflight-v1",
+    "astra-profile-preflight-v1",
+    "astra-profile-preflight-v2",
+    "astra-pinned-preflight-v1"
+  ],
+  "runs": [
+    {
+      "directory": "grok46-profile-queue-v1",
+      "environment": {
+        "attempts": 2,
+        "baseline": "gremlord",
+        "claude_version": "2.1.271 (Claude Code)",
+        "codex_version": "codex-cli 0.154.0",
+        "complex.py_sha256": "133ac58e866b0da9330023cb01f20b90b8df20036203ac87cb17fbf0f30b2b9c",
+        "configured_api": "chat_completions",
+        "context_budget": 500000,
+        "effective_api": "responses",
+        "effort": "high",
+        "executable_sha256": "9e6dad3abe32562f0ead4760ad7e8b8f226a183dc1e258ed50c12be5d8ffed2f",
+        "execution_profile_sha256": "9f3df4fc6633f249e703920959b8a189e6478761076756715d490c161a05fc08",
+        "git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "git_head": "1496db0beaa04ffbe33fccfc583d3da51c735668",
+        "manifest_sha256": "f1c505500bb77ba26418d8e1fce42ae15a02be8d452d1ebb98a3c0bc026759eb",
+        "max_output_tokens_per_request": 32768,
+        "max_requests_per_candidate": 64,
+        "model": "grok-4.6",
+        "mut": "gpt-efficient",
+        "planner.py_sha256": "3999879c1046dc7d67a1903ee13be0761a0ea49e3a4ee5134a0d2c0d3e2155b6",
+        "price_per_million": {
+          "input": 2,
+          "output": 6,
+          "cache_read": 0.5,
+          "cache_write": 2
+        },
+        "requested_context_budget": 600000,
+        "seed": 20260915,
+        "timeout": "25m0s",
+        "user_turns_per_candidate": 3
+      },
+      "audit": {
+        "profile_sha256": "9f3df4fc6633f249e703920959b8a189e6478761076756715d490c161a05fc08",
+        "paired_usage_checks": [
+          {
+            "attempt": 1,
+            "arm": "gremlord",
+            "requests": 23,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          },
+          {
+            "attempt": 1,
+            "arm": "gpt-efficient",
+            "requests": 23,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          },
+          {
+            "attempt": 2,
+            "arm": "gremlord",
+            "requests": 23,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          },
+          {
+            "attempt": 2,
+            "arm": "gpt-efficient",
+            "requests": 21,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          }
+        ],
+        "claude_tool_schema_hashes": 1,
+        "base_instruction_hashes": 2,
+        "all_effort_high": true,
+        "reported_effective_reasoning_contexts": [
+          ""
+        ],
+        "profile_arm_checks_pass": true,
+        "base_instruction_hashes_match": false,
+        "requested_service_tiers": [
+          "unrecorded"
+        ],
+        "service_tiers": [
+          "unrecorded"
+        ],
+        "cache_write_tokens": 0,
+        "maximum_input_tokens": 97610
+      }
+    },
+    {
+      "directory": "grok46-profile-planner-v2",
+      "environment": {
+        "attempts": 1,
+        "baseline": "gremlord",
+        "claude_version": "2.1.271 (Claude Code)",
+        "codex_version": "codex-cli 0.154.0",
+        "complex.py_sha256": "133ac58e866b0da9330023cb01f20b90b8df20036203ac87cb17fbf0f30b2b9c",
+        "configured_api": "chat_completions",
+        "context_budget": 500000,
+        "effective_api": "responses",
+        "effort": "high",
+        "executable_sha256": "c19710f56602261c56dc6254851ab309858498c28030b8bbbbf41678242a1b12",
+        "execution_profile_sha256": "9f3df4fc6633f249e703920959b8a189e6478761076756715d490c161a05fc08",
+        "git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "git_head": "4d584adcc9ac7d6aa34566e63fc69a54a1b17b09",
+        "manifest_sha256": "fbf236647e2d93fc570a4291b4e003dac73a3e2aa9b79e02cce5e01d62ef928b",
+        "max_output_tokens_per_request": 32768,
+        "max_requests_per_candidate": 64,
+        "meter_version": "cache-write-v1",
+        "model": "grok-4.6",
+        "mut": "gpt-efficient",
+        "planner.py_sha256": "3999879c1046dc7d67a1903ee13be0761a0ea49e3a4ee5134a0d2c0d3e2155b6",
+        "price_per_million": {
+          "input": 2,
+          "output": 6,
+          "cache_read": 0.5,
+          "cache_write": 2
+        },
+        "requested_context_budget": 600000,
+        "seed": 20260915,
+        "timeout": "25m0s",
+        "user_turns_per_candidate": 3
+      },
+      "audit": {
+        "profile_sha256": "9f3df4fc6633f249e703920959b8a189e6478761076756715d490c161a05fc08",
+        "paired_usage_checks": [
+          {
+            "attempt": 1,
+            "arm": "gremlord",
+            "requests": 17,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          },
+          {
+            "attempt": 1,
+            "arm": "gpt-efficient",
+            "requests": 19,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          }
+        ],
+        "claude_tool_schema_hashes": 1,
+        "base_instruction_hashes": 1,
+        "all_effort_high": true,
+        "reported_effective_reasoning_contexts": [
+          ""
+        ],
+        "profile_arm_checks_pass": true,
+        "base_instruction_hashes_match": true,
+        "requested_service_tiers": [
+          ""
+        ],
+        "service_tiers": [
+          "default"
+        ],
+        "cache_write_tokens": 0,
+        "maximum_input_tokens": 72378
+      }
+    },
+    {
+      "directory": "astra-profile-queue-v1",
+      "environment": {
+        "attempts": 2,
+        "baseline": "gremlord",
+        "cache_write_price_override": 12.5,
+        "claude_version": "2.1.271 (Claude Code)",
+        "codex_version": "codex-cli 0.154.0",
+        "complex.py_sha256": "133ac58e866b0da9330023cb01f20b90b8df20036203ac87cb17fbf0f30b2b9c",
+        "configured_api": "responses",
+        "context_budget": 600000,
+        "effective_api": "responses",
+        "effort": "high",
+        "executable_sha256": "c19710f56602261c56dc6254851ab309858498c28030b8bbbbf41678242a1b12",
+        "execution_profile_sha256": "9f3df4fc6633f249e703920959b8a189e6478761076756715d490c161a05fc08",
+        "git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "git_head": "4d584adcc9ac7d6aa34566e63fc69a54a1b17b09",
+        "manifest_sha256": "f1c505500bb77ba26418d8e1fce42ae15a02be8d452d1ebb98a3c0bc026759eb",
+        "max_output_tokens_per_request": 32768,
+        "max_requests_per_candidate": 64,
+        "meter_version": "cache-write-v1",
+        "model": "gpt-6-astra",
+        "mut": "gpt-efficient",
+        "planner.py_sha256": "3999879c1046dc7d67a1903ee13be0761a0ea49e3a4ee5134a0d2c0d3e2155b6",
+        "price_per_million": {
+          "input": 10,
+          "output": 50,
+          "cache_read": 1,
+          "cache_write": 12.5
+        },
+        "requested_context_budget": 600000,
+        "seed": 20260915,
+        "timeout": "25m0s",
+        "user_turns_per_candidate": 3
+      },
+      "audit": {
+        "profile_sha256": "9f3df4fc6633f249e703920959b8a189e6478761076756715d490c161a05fc08",
+        "paired_usage_checks": [
+          {
+            "attempt": 1,
+            "arm": "gremlord",
+            "requests": 27,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          },
+          {
+            "attempt": 1,
+            "arm": "gpt-efficient",
+            "requests": 28,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          },
+          {
+            "attempt": 2,
+            "arm": "gremlord",
+            "requests": 42,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          },
+          {
+            "attempt": 2,
+            "arm": "gpt-efficient",
+            "requests": 29,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          }
+        ],
+        "claude_tool_schema_hashes": 1,
+        "base_instruction_hashes": 1,
+        "all_effort_high": true,
+        "reported_effective_reasoning_contexts": [
+          "all_turns"
+        ],
+        "profile_arm_checks_pass": true,
+        "base_instruction_hashes_match": true,
+        "requested_service_tiers": [
+          ""
+        ],
+        "service_tiers": [
+          "default"
+        ],
+        "cache_write_tokens": 263318,
+        "maximum_input_tokens": 90142
+      }
+    },
+    {
+      "directory": "astra-profile-planner-v1",
+      "environment": {
+        "attempts": 1,
+        "baseline": "gremlord",
+        "cache_write_price_override": 12.5,
+        "claude_version": "2.1.271 (Claude Code)",
+        "codex_version": "codex-cli 0.154.0",
+        "complex.py_sha256": "133ac58e866b0da9330023cb01f20b90b8df20036203ac87cb17fbf0f30b2b9c",
+        "configured_api": "responses",
+        "context_budget": 600000,
+        "effective_api": "responses",
+        "effort": "high",
+        "executable_sha256": "c19710f56602261c56dc6254851ab309858498c28030b8bbbbf41678242a1b12",
+        "execution_profile_sha256": "9f3df4fc6633f249e703920959b8a189e6478761076756715d490c161a05fc08",
+        "git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "git_head": "4d584adcc9ac7d6aa34566e63fc69a54a1b17b09",
+        "manifest_sha256": "fbf236647e2d93fc570a4291b4e003dac73a3e2aa9b79e02cce5e01d62ef928b",
+        "max_output_tokens_per_request": 32768,
+        "max_requests_per_candidate": 64,
+        "meter_version": "cache-write-v1",
+        "model": "gpt-6-astra",
+        "mut": "gpt-efficient",
+        "planner.py_sha256": "3999879c1046dc7d67a1903ee13be0761a0ea49e3a4ee5134a0d2c0d3e2155b6",
+        "price_per_million": {
+          "input": 10,
+          "output": 50,
+          "cache_read": 1,
+          "cache_write": 12.5
+        },
+        "requested_context_budget": 600000,
+        "seed": 20260915,
+        "timeout": "25m0s",
+        "user_turns_per_candidate": 3
+      },
+      "audit": {
+        "profile_sha256": "9f3df4fc6633f249e703920959b8a189e6478761076756715d490c161a05fc08",
+        "paired_usage_checks": [
+          {
+            "attempt": 1,
+            "arm": "gremlord",
+            "requests": 17,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          },
+          {
+            "attempt": 1,
+            "arm": "gpt-efficient",
+            "requests": 20,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          }
+        ],
+        "claude_tool_schema_hashes": 1,
+        "base_instruction_hashes": 1,
+        "all_effort_high": true,
+        "reported_effective_reasoning_contexts": [
+          "all_turns"
+        ],
+        "profile_arm_checks_pass": true,
+        "base_instruction_hashes_match": true,
+        "requested_service_tiers": [
+          ""
+        ],
+        "service_tiers": [
+          "default"
+        ],
+        "cache_write_tokens": 93094,
+        "maximum_input_tokens": 48085
+      }
+    },
+    {
+      "directory": "astra-native-queue-v2",
+      "environment": {
+        "attempts": 2,
+        "baseline": "codex",
+        "cache_write_price_override": 12.5,
+        "claude_version": "2.1.271 (Claude Code)",
+        "codex_version": "codex-cli 0.154.0",
+        "complex.py_sha256": "133ac58e866b0da9330023cb01f20b90b8df20036203ac87cb17fbf0f30b2b9c",
+        "configured_api": "responses",
+        "context_budget": 600000,
+        "effective_api": "responses",
+        "effort": "high",
+        "executable_sha256": "c19710f56602261c56dc6254851ab309858498c28030b8bbbbf41678242a1b12",
+        "execution_profile_sha256": "9f3df4fc6633f249e703920959b8a189e6478761076756715d490c161a05fc08",
+        "git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "git_head": "4d584adcc9ac7d6aa34566e63fc69a54a1b17b09",
+        "manifest_sha256": "f1c505500bb77ba26418d8e1fce42ae15a02be8d452d1ebb98a3c0bc026759eb",
+        "max_output_tokens_per_request": 32768,
+        "max_requests_per_candidate": 64,
+        "meter_version": "cache-write-v1",
+        "model": "gpt-6-astra",
+        "mut": "gremlord",
+        "planner.py_sha256": "3999879c1046dc7d67a1903ee13be0761a0ea49e3a4ee5134a0d2c0d3e2155b6",
+        "price_per_million": {
+          "input": 10,
+          "output": 50,
+          "cache_read": 1,
+          "cache_write": 12.5
+        },
+        "requested_context_budget": 600000,
+        "seed": 20260915,
+        "timeout": "25m0s",
+        "user_turns_per_candidate": 3
+      },
+      "audit": {
+        "profile_sha256": "9f3df4fc6633f249e703920959b8a189e6478761076756715d490c161a05fc08",
+        "paired_usage_checks": [
+          {
+            "attempt": 1,
+            "arm": "codex",
+            "requests": 19,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          },
+          {
+            "attempt": 1,
+            "arm": "gremlord",
+            "requests": 36,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          },
+          {
+            "attempt": 2,
+            "arm": "codex",
+            "requests": 19,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          },
+          {
+            "attempt": 2,
+            "arm": "gremlord",
+            "requests": 40,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          }
+        ],
+        "claude_tool_schema_hashes": 1,
+        "base_instruction_hashes": 1,
+        "all_effort_high": true,
+        "reported_effective_reasoning_contexts": [
+          "all_turns"
+        ],
+        "profile_arm_checks_pass": true,
+        "base_instruction_hashes_match": true,
+        "requested_service_tiers": [
+          ""
+        ],
+        "service_tiers": [
+          "default"
+        ],
+        "cache_write_tokens": 259587,
+        "maximum_input_tokens": 84401
+      }
+    },
+    {
+      "directory": "astra-native-planner-v3",
+      "environment": {
+        "attempts": 1,
+        "baseline": "codex",
+        "cache_write_price_override": 12.5,
+        "claude_version": "2.1.271 (Claude Code)",
+        "codex_version": "codex-cli 0.154.0",
+        "complex.py_sha256": "133ac58e866b0da9330023cb01f20b90b8df20036203ac87cb17fbf0f30b2b9c",
+        "configured_api": "responses",
+        "context_budget": 600000,
+        "effective_api": "responses",
+        "effort": "high",
+        "executable_sha256": "c19710f56602261c56dc6254851ab309858498c28030b8bbbbf41678242a1b12",
+        "execution_profile_sha256": "9f3df4fc6633f249e703920959b8a189e6478761076756715d490c161a05fc08",
+        "git_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "git_head": "4d584adcc9ac7d6aa34566e63fc69a54a1b17b09",
+        "manifest_sha256": "fbf236647e2d93fc570a4291b4e003dac73a3e2aa9b79e02cce5e01d62ef928b",
+        "max_output_tokens_per_request": 32768,
+        "max_requests_per_candidate": 64,
+        "meter_version": "cache-write-v1",
+        "model": "gpt-6-astra",
+        "mut": "gremlord",
+        "planner.py_sha256": "3999879c1046dc7d67a1903ee13be0761a0ea49e3a4ee5134a0d2c0d3e2155b6",
+        "price_per_million": {
+          "input": 10,
+          "output": 50,
+          "cache_read": 1,
+          "cache_write": 12.5
+        },
+        "requested_context_budget": 600000,
+        "seed": 20260915,
+        "timeout": "25m0s",
+        "user_turns_per_candidate": 3
+      },
+      "audit": {
+        "profile_sha256": "9f3df4fc6633f249e703920959b8a189e6478761076756715d490c161a05fc08",
+        "paired_usage_checks": [
+          {
+            "attempt": 1,
+            "arm": "codex",
+            "requests": 15,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          },
+          {
+            "attempt": 1,
+            "arm": "gremlord",
+            "requests": 20,
+            "cost_matches": true,
+            "usage_matches": true,
+            "unknown_usage_requests": 0
+          }
+        ],
+        "claude_tool_schema_hashes": 1,
+        "base_instruction_hashes": 1,
+        "all_effort_high": true,
+        "reported_effective_reasoning_contexts": [
+          "all_turns"
+        ],
+        "profile_arm_checks_pass": true,
+        "base_instruction_hashes_match": true,
+        "requested_service_tiers": [
+          ""
+        ],
+        "service_tiers": [
+          "default"
+        ],
+        "cache_write_tokens": 75161,
+        "maximum_input_tokens": 47880
+      }
+    }
+  ],
+  "candidates": [
+    {
+      "model": "grok-4.6",
+      "comparison": "profile",
+      "directory": "grok46-profile-queue-v1",
+      "task": "durable_queue",
+      "attempt": 1,
+      "arm": "gremlord",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 831.075,
+      "requests": 23,
+      "estimated_usd": 1.126766,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 1312135,
+      "cached_input_tokens": 1206656,
+      "cache_write_tokens": 0,
+      "output_tokens": 52080,
+      "reasoning_tokens": 30311,
+      "tool_calls": 28,
+      "upstream_seconds": 826.848,
+      "median_first_output_seconds": 1.276,
+      "actual_claude_version": "2.1.273",
+      "estimated_cost_components": {
+        "ordinary_input": 0.210958,
+        "cached_read": 0.603328,
+        "cache_write": 0.0,
+        "output_including_reasoning": 0.31248
+      }
+    },
+    {
+      "model": "grok-4.6",
+      "comparison": "profile",
+      "directory": "grok46-profile-queue-v1",
+      "task": "durable_queue",
+      "attempt": 1,
+      "arm": "gpt-efficient",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 765.103,
+      "requests": 23,
+      "estimated_usd": 1.149298,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 1354379,
+      "cached_input_tokens": 1245184,
+      "cache_write_tokens": 0,
+      "output_tokens": 51386,
+      "reasoning_tokens": 32153,
+      "tool_calls": 26,
+      "upstream_seconds": 762.803,
+      "median_first_output_seconds": 1.246,
+      "actual_claude_version": "2.1.271",
+      "estimated_cost_components": {
+        "ordinary_input": 0.21839,
+        "cached_read": 0.622592,
+        "cache_write": 0.0,
+        "output_including_reasoning": 0.308316
+      }
+    },
+    {
+      "model": "grok-4.6",
+      "comparison": "profile",
+      "directory": "grok46-profile-queue-v1",
+      "task": "durable_queue",
+      "attempt": 2,
+      "arm": "gremlord",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 850.095,
+      "requests": 23,
+      "estimated_usd": 1.4087919999999998,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 1334720,
+      "cached_input_tokens": 1059968,
+      "cache_write_tokens": 0,
+      "output_tokens": 54884,
+      "reasoning_tokens": 32845,
+      "tool_calls": 30,
+      "upstream_seconds": 847.147,
+      "median_first_output_seconds": 2.106,
+      "actual_claude_version": "2.1.273",
+      "estimated_cost_components": {
+        "ordinary_input": 0.549504,
+        "cached_read": 0.529984,
+        "cache_write": 0.0,
+        "output_including_reasoning": 0.329304
+      }
+    },
+    {
+      "model": "grok-4.6",
+      "comparison": "profile",
+      "directory": "grok46-profile-queue-v1",
+      "task": "durable_queue",
+      "attempt": 2,
+      "arm": "gpt-efficient",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 739.816,
+      "requests": 21,
+      "estimated_usd": 1.061726,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 1002001,
+      "cached_input_tokens": 818688,
+      "cache_write_tokens": 0,
+      "output_tokens": 47626,
+      "reasoning_tokens": 28224,
+      "tool_calls": 24,
+      "upstream_seconds": 737.628,
+      "median_first_output_seconds": 1.329,
+      "actual_claude_version": "2.1.273",
+      "estimated_cost_components": {
+        "ordinary_input": 0.366626,
+        "cached_read": 0.409344,
+        "cache_write": 0.0,
+        "output_including_reasoning": 0.285756
+      }
+    },
+    {
+      "model": "grok-4.6",
+      "comparison": "profile",
+      "directory": "grok46-profile-planner-v2",
+      "task": "dependency_planner",
+      "attempt": 1,
+      "arm": "gremlord",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 618.76,
+      "requests": 17,
+      "estimated_usd": 0.695466,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 688665,
+      "cached_input_tokens": 616064,
+      "cache_write_tokens": 0,
+      "output_tokens": 40372,
+      "reasoning_tokens": 25420,
+      "tool_calls": 20,
+      "upstream_seconds": 617.325,
+      "median_first_output_seconds": 1.257,
+      "actual_claude_version": "2.1.271",
+      "estimated_cost_components": {
+        "ordinary_input": 0.145202,
+        "cached_read": 0.308032,
+        "cache_write": 0.0,
+        "output_including_reasoning": 0.242232
+      }
+    },
+    {
+      "model": "grok-4.6",
+      "comparison": "profile",
+      "directory": "grok46-profile-planner-v2",
+      "task": "dependency_planner",
+      "attempt": 1,
+      "arm": "gpt-efficient",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 521.647,
+      "requests": 19,
+      "estimated_usd": 0.7853380000000001,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 692942,
+      "cached_input_tokens": 530048,
+      "cache_write_tokens": 0,
+      "output_tokens": 32421,
+      "reasoning_tokens": 20169,
+      "tool_calls": 24,
+      "upstream_seconds": 519.972,
+      "median_first_output_seconds": 1.12,
+      "actual_claude_version": "2.1.271",
+      "estimated_cost_components": {
+        "ordinary_input": 0.325788,
+        "cached_read": 0.265024,
+        "cache_write": 0.0,
+        "output_including_reasoning": 0.194526
+      }
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "profile",
+      "directory": "astra-profile-queue-v1",
+      "task": "durable_queue",
+      "attempt": 1,
+      "arm": "gremlord",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 711.391,
+      "requests": 27,
+      "estimated_usd": 3.5514394999999994,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 1007339,
+      "cached_input_tokens": 941102,
+      "cache_write_tokens": 65587,
+      "output_tokens": 35680,
+      "reasoning_tokens": 13376,
+      "tool_calls": 35,
+      "upstream_seconds": 707.958,
+      "median_first_output_seconds": 7.463,
+      "actual_claude_version": "2.1.271",
+      "estimated_cost_components": {
+        "ordinary_input": 0.0065,
+        "cached_read": 0.941102,
+        "cache_write": 0.8198375,
+        "output_including_reasoning": 1.784
+      }
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "profile",
+      "directory": "astra-profile-queue-v1",
+      "task": "durable_queue",
+      "attempt": 1,
+      "arm": "gpt-efficient",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 840.922,
+      "requests": 28,
+      "estimated_usd": 3.4007404999999995,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 957706,
+      "cached_input_tokens": 901388,
+      "cache_write_tokens": 55649,
+      "output_tokens": 35941,
+      "reasoning_tokens": 14886,
+      "tool_calls": 33,
+      "upstream_seconds": 837.593,
+      "median_first_output_seconds": 4.0455,
+      "actual_claude_version": "2.1.271",
+      "estimated_cost_components": {
+        "ordinary_input": 0.00669,
+        "cached_read": 0.901388,
+        "cache_write": 0.6956125,
+        "output_including_reasoning": 1.79705
+      }
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "profile",
+      "directory": "astra-profile-queue-v1",
+      "task": "durable_queue",
+      "attempt": 2,
+      "arm": "gremlord",
+      "checkpoints_passed": 2,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 1132.833,
+      "requests": 42,
+      "estimated_usd": 5.674190500000001,
+      "status": "timeout",
+      "final_passed": false,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 2225137,
+      "cached_input_tokens": 2147678,
+      "cache_write_tokens": 76509,
+      "output_tokens": 51213,
+      "reasoning_tokens": 20977,
+      "tool_calls": 52,
+      "upstream_seconds": 1093.128,
+      "median_first_output_seconds": 6.3235,
+      "actual_claude_version": "2.1.271",
+      "estimated_cost_components": {
+        "ordinary_input": 0.0095,
+        "cached_read": 2.147678,
+        "cache_write": 0.9563625,
+        "output_including_reasoning": 2.56065
+      }
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "profile",
+      "directory": "astra-profile-queue-v1",
+      "task": "durable_queue",
+      "attempt": 2,
+      "arm": "gpt-efficient",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 769.699,
+      "requests": 29,
+      "estimated_usd": 3.782571499999999,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 1159831,
+      "cached_input_tokens": 1093569,
+      "cache_write_tokens": 65573,
+      "output_tokens": 37249,
+      "reasoning_tokens": 14384,
+      "tool_calls": 39,
+      "upstream_seconds": 764.925,
+      "median_first_output_seconds": 5.38,
+      "actual_claude_version": "2.1.271",
+      "estimated_cost_components": {
+        "ordinary_input": 0.00689,
+        "cached_read": 1.093569,
+        "cache_write": 0.8196625,
+        "output_including_reasoning": 1.86245
+      }
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "profile",
+      "directory": "astra-profile-planner-v1",
+      "task": "dependency_planner",
+      "attempt": 1,
+      "arm": "gremlord",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 349.205,
+      "requests": 17,
+      "estimated_usd": 1.9046465,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 456340,
+      "cached_input_tokens": 407824,
+      "cache_write_tokens": 48065,
+      "output_tokens": 17830,
+      "reasoning_tokens": 3468,
+      "tool_calls": 23,
+      "upstream_seconds": 347.255,
+      "median_first_output_seconds": 4.493,
+      "actual_claude_version": "2.1.271",
+      "estimated_cost_components": {
+        "ordinary_input": 0.00451,
+        "cached_read": 0.407824,
+        "cache_write": 0.6008125,
+        "output_including_reasoning": 0.8915
+      }
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "profile",
+      "directory": "astra-profile-planner-v1",
+      "task": "dependency_planner",
+      "attempt": 1,
+      "arm": "gpt-efficient",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 385.967,
+      "requests": 20,
+      "estimated_usd": 2.0557635000000003,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 520840,
+      "cached_input_tokens": 475301,
+      "cache_write_tokens": 45029,
+      "output_tokens": 20250,
+      "reasoning_tokens": 5516,
+      "tool_calls": 26,
+      "upstream_seconds": 384.08,
+      "median_first_output_seconds": 4.3759999999999994,
+      "actual_claude_version": "2.1.271",
+      "estimated_cost_components": {
+        "ordinary_input": 0.0051,
+        "cached_read": 0.475301,
+        "cache_write": 0.5628625,
+        "output_including_reasoning": 1.0125
+      }
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "native",
+      "directory": "astra-native-queue-v2",
+      "task": "durable_queue",
+      "attempt": 1,
+      "arm": "codex",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 663.826,
+      "requests": 19,
+      "estimated_usd": 3.1273839999999997,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 595843,
+      "cached_input_tokens": 534614,
+      "cache_write_tokens": 61172,
+      "output_tokens": 36551,
+      "reasoning_tokens": 9773,
+      "tool_calls": 16,
+      "upstream_seconds": 659.114,
+      "median_first_output_seconds": 2.505,
+      "estimated_cost_components": {
+        "ordinary_input": 0.00057,
+        "cached_read": 0.534614,
+        "cache_write": 0.76465,
+        "output_including_reasoning": 1.82755
+      }
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "native",
+      "directory": "astra-native-queue-v2",
+      "task": "durable_queue",
+      "attempt": 1,
+      "arm": "gremlord",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 904.561,
+      "requests": 36,
+      "estimated_usd": 4.651385000000001,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 1582292,
+      "cached_input_tokens": 1510695,
+      "cache_write_tokens": 70768,
+      "output_tokens": 44956,
+      "reasoning_tokens": 18355,
+      "tool_calls": 40,
+      "upstream_seconds": 886.042,
+      "median_first_output_seconds": 2.8915,
+      "actual_claude_version": "2.1.271",
+      "estimated_cost_components": {
+        "ordinary_input": 0.00829,
+        "cached_read": 1.510695,
+        "cache_write": 0.8846,
+        "output_including_reasoning": 2.2478
+      }
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "native",
+      "directory": "astra-native-queue-v2",
+      "task": "durable_queue",
+      "attempt": 2,
+      "arm": "codex",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 700.048,
+      "requests": 19,
+      "estimated_usd": 3.3362720000000006,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 618189,
+      "cached_input_tokens": 554352,
+      "cache_write_tokens": 63780,
+      "output_tokens": 39682,
+      "reasoning_tokens": 10920,
+      "tool_calls": 16,
+      "upstream_seconds": 696.396,
+      "median_first_output_seconds": 4.22,
+      "estimated_cost_components": {
+        "ordinary_input": 0.00057,
+        "cached_read": 0.554352,
+        "cache_write": 0.79725,
+        "output_including_reasoning": 1.9841
+      }
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "native",
+      "directory": "astra-native-queue-v2",
+      "task": "durable_queue",
+      "attempt": 2,
+      "arm": "gremlord",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 837.093,
+      "requests": 40,
+      "estimated_usd": 4.527461500000001,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 1663810,
+      "cached_input_tokens": 1599034,
+      "cache_write_tokens": 63867,
+      "output_tokens": 42420,
+      "reasoning_tokens": 17686,
+      "tool_calls": 42,
+      "upstream_seconds": 818.893,
+      "median_first_output_seconds": 3.086,
+      "actual_claude_version": "2.1.271",
+      "estimated_cost_components": {
+        "ordinary_input": 0.00909,
+        "cached_read": 1.599034,
+        "cache_write": 0.7983375,
+        "output_including_reasoning": 2.121
+      }
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "native",
+      "directory": "astra-native-planner-v3",
+      "task": "dependency_planner",
+      "attempt": 1,
+      "arm": "codex",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 274.267,
+      "requests": 15,
+      "estimated_usd": 1.6330304999999998,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 324179,
+      "cached_input_tokens": 283843,
+      "cache_write_tokens": 40291,
+      "output_tokens": 16902,
+      "reasoning_tokens": 2901,
+      "tool_calls": 12,
+      "upstream_seconds": 272.146,
+      "median_first_output_seconds": 2.712,
+      "estimated_cost_components": {
+        "ordinary_input": 0.00045,
+        "cached_read": 0.283843,
+        "cache_write": 0.5036375,
+        "output_including_reasoning": 0.8451
+      }
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "native",
+      "directory": "astra-native-planner-v3",
+      "task": "dependency_planner",
+      "attempt": 1,
+      "arm": "gremlord",
+      "checkpoints_passed": 3,
+      "checkpoints_expected": 3,
+      "checkpoints_recorded": 3,
+      "agent_seconds": 456.764,
+      "requests": 20,
+      "estimated_usd": 2.142607,
+      "status": "complete",
+      "final_passed": true,
+      "api_errors": 0,
+      "unknown_usage_requests": 0,
+      "input_tokens": 538862,
+      "cached_input_tokens": 503482,
+      "cache_write_tokens": 34870,
+      "output_tokens": 23963,
+      "reasoning_tokens": 8966,
+      "tool_calls": 26,
+      "upstream_seconds": 454.671,
+      "median_first_output_seconds": 7.843999999999999,
+      "actual_claude_version": "2.1.271",
+      "estimated_cost_components": {
+        "ordinary_input": 0.0051,
+        "cached_read": 0.503482,
+        "cache_write": 0.435875,
+        "output_including_reasoning": 1.19815
+      }
+    }
+  ],
+  "paired_comparisons": [
+    {
+      "model": "grok-4.6",
+      "comparison": "profile",
+      "task": "queue",
+      "attempt": 1,
+      "both_passed": true,
+      "base_instruction_hashes_match": false,
+      "time_change_percent": -7.938152392984998,
+      "cost_change_percent": 1.9997053514216878
+    },
+    {
+      "model": "grok-4.6",
+      "comparison": "profile",
+      "task": "queue",
+      "attempt": 2,
+      "both_passed": true,
+      "base_instruction_hashes_match": true,
+      "time_change_percent": -12.972550126750537,
+      "cost_change_percent": -24.635716273232667
+    },
+    {
+      "model": "grok-4.6",
+      "comparison": "profile",
+      "task": "planner",
+      "attempt": 1,
+      "both_passed": true,
+      "base_instruction_hashes_match": true,
+      "time_change_percent": -15.694776650074338,
+      "cost_change_percent": 12.92255839969172
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "profile",
+      "task": "queue",
+      "attempt": 1,
+      "both_passed": true,
+      "base_instruction_hashes_match": true,
+      "time_change_percent": 18.208130268727054,
+      "cost_change_percent": -4.243321616488183
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "profile",
+      "task": "queue",
+      "attempt": 2,
+      "both_passed": false,
+      "base_instruction_hashes_match": true,
+      "time_change_percent": null,
+      "cost_change_percent": null
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "profile",
+      "task": "planner",
+      "attempt": 1,
+      "both_passed": true,
+      "base_instruction_hashes_match": true,
+      "time_change_percent": 10.527340673816244,
+      "cost_change_percent": 7.934123208689936
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "native",
+      "task": "queue",
+      "attempt": 1,
+      "both_passed": true,
+      "base_instruction_hashes_match": true,
+      "time_change_percent": 36.264774202878456,
+      "cost_change_percent": 48.730856204418814
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "native",
+      "task": "queue",
+      "attempt": 2,
+      "both_passed": true,
+      "base_instruction_hashes_match": true,
+      "time_change_percent": 19.576514753274065,
+      "cost_change_percent": 35.704208170077266
+    },
+    {
+      "model": "gpt-6-astra",
+      "comparison": "native",
+      "task": "planner",
+      "attempt": 1,
+      "both_passed": true,
+      "base_instruction_hashes_match": true,
+      "time_change_percent": 66.53990454557058,
+      "cost_change_percent": 31.204346765109413
+    }
+  ],
+  "details": [
+    {
+      "run": "grok46-profile-queue-v1",
+      "task": "queue",
+      "comparison": "profile",
+      "model": "grok-4.6",
+      "attempt": 1,
+      "arm": "gremlord",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 214.651,
+          "requests": 6,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 31258
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 194.109,
+          "requests": 5,
+          "initial_reasoning_items": 6,
+          "max_input_tokens": 51873
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 422.315,
+          "requests": 12,
+          "initial_reasoning_items": 10,
+          "max_input_tokens": 88651
+        }
+      ],
+      "claude_tool_histogram": {
+        "Bash": 7,
+        "Read": 9,
+        "Write": 4,
+        "Edit": 8
+      },
+      "multi_tool_responses": 7,
+      "response_tiers": [
+        "unrecorded"
+      ],
+      "reasoning_contexts": [
+        ""
+      ],
+      "lite_values": [
+        false
+      ],
+      "parallel_values": [
+        true
+      ],
+      "cache_write_reported_requests": 0,
+      "reasoning_input_items": 219,
+      "reasoning_output_items": 23,
+      "max_visible_input_bytes": 180439,
+      "first_tool_count": 17,
+      "first_tool_schema_bytes": 58535,
+      "first_instructions_bytes": 3578,
+      "first_tool_description_bytes": 42267,
+      "base_instruction_hashes": [
+        "9550f4ac282f14884808249fd6849ccc1dd3d9ca44d400d38a2d67284159d979"
+      ]
+    },
+    {
+      "run": "grok46-profile-queue-v1",
+      "task": "queue",
+      "comparison": "profile",
+      "model": "grok-4.6",
+      "attempt": 1,
+      "arm": "gpt-efficient",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 211.577,
+          "requests": 6,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 32619
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 201.68,
+          "requests": 5,
+          "initial_reasoning_items": 6,
+          "max_input_tokens": 53985
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 351.846,
+          "requests": 12,
+          "initial_reasoning_items": 10,
+          "max_input_tokens": 91984
+        }
+      ],
+      "claude_tool_histogram": {
+        "Bash": 7,
+        "Read": 8,
+        "Write": 4,
+        "Edit": 7
+      },
+      "multi_tool_responses": 5,
+      "response_tiers": [
+        "unrecorded"
+      ],
+      "reasoning_contexts": [
+        ""
+      ],
+      "lite_values": [
+        false
+      ],
+      "parallel_values": [
+        true
+      ],
+      "cache_write_reported_requests": 0,
+      "reasoning_input_items": 208,
+      "reasoning_output_items": 22,
+      "max_visible_input_bytes": 179048,
+      "first_tool_count": 17,
+      "first_tool_schema_bytes": 58535,
+      "first_instructions_bytes": 4966,
+      "first_tool_description_bytes": 42267,
+      "base_instruction_hashes": [
+        "61897a1308338cdcda106007e00d2108674ad798522ef88d2b0a64a13600fbd3"
+      ]
+    },
+    {
+      "run": "grok46-profile-queue-v1",
+      "task": "queue",
+      "comparison": "profile",
+      "model": "grok-4.6",
+      "attempt": 2,
+      "arm": "gremlord",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 266.855,
+          "requests": 6,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 34191
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 271.0,
+          "requests": 8,
+          "initial_reasoning_items": 6,
+          "max_input_tokens": 59714
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 312.24,
+          "requests": 9,
+          "initial_reasoning_items": 11,
+          "max_input_tokens": 97610
+        }
+      ],
+      "claude_tool_histogram": {
+        "Bash": 8,
+        "Read": 7,
+        "Write": 4,
+        "Edit": 11
+      },
+      "multi_tool_responses": 7,
+      "response_tiers": [
+        "unrecorded"
+      ],
+      "reasoning_contexts": [
+        ""
+      ],
+      "lite_values": [
+        false
+      ],
+      "parallel_values": [
+        true
+      ],
+      "cache_write_reported_requests": 0,
+      "reasoning_input_items": 205,
+      "reasoning_output_items": 23,
+      "max_visible_input_bytes": 208067,
+      "first_tool_count": 17,
+      "first_tool_schema_bytes": 58535,
+      "first_instructions_bytes": 3578,
+      "first_tool_description_bytes": 42267,
+      "base_instruction_hashes": [
+        "9550f4ac282f14884808249fd6849ccc1dd3d9ca44d400d38a2d67284159d979"
+      ]
+    },
+    {
+      "run": "grok46-profile-queue-v1",
+      "task": "queue",
+      "comparison": "profile",
+      "model": "grok-4.6",
+      "attempt": 2,
+      "arm": "gpt-efficient",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 218.926,
+          "requests": 8,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 32986
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 212.491,
+          "requests": 5,
+          "initial_reasoning_items": 7,
+          "max_input_tokens": 54480
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 308.399,
+          "requests": 8,
+          "initial_reasoning_items": 11,
+          "max_input_tokens": 78410
+        }
+      ],
+      "claude_tool_histogram": {
+        "Bash": 6,
+        "Read": 8,
+        "Write": 4,
+        "Edit": 6
+      },
+      "multi_tool_responses": 5,
+      "response_tiers": [
+        "unrecorded"
+      ],
+      "reasoning_contexts": [
+        ""
+      ],
+      "lite_values": [
+        false
+      ],
+      "parallel_values": [
+        true
+      ],
+      "cache_write_reported_requests": 0,
+      "reasoning_input_items": 175,
+      "reasoning_output_items": 21,
+      "max_visible_input_bytes": 150315,
+      "first_tool_count": 17,
+      "first_tool_schema_bytes": 58535,
+      "first_instructions_bytes": 4966,
+      "first_tool_description_bytes": 42267,
+      "base_instruction_hashes": [
+        "9550f4ac282f14884808249fd6849ccc1dd3d9ca44d400d38a2d67284159d979"
+      ]
+    },
+    {
+      "run": "grok46-profile-planner-v2",
+      "task": "planner",
+      "comparison": "profile",
+      "model": "grok-4.6",
+      "attempt": 1,
+      "arm": "gremlord",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 156.199,
+          "requests": 6,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 27674
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 236.884,
+          "requests": 6,
+          "initial_reasoning_items": 6,
+          "max_input_tokens": 47949
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 225.677,
+          "requests": 5,
+          "initial_reasoning_items": 10,
+          "max_input_tokens": 72378
+        }
+      ],
+      "claude_tool_histogram": {
+        "Bash": 5,
+        "Read": 8,
+        "Write": 4,
+        "Edit": 3
+      },
+      "multi_tool_responses": 4,
+      "response_tiers": [
+        "default"
+      ],
+      "reasoning_contexts": [
+        ""
+      ],
+      "lite_values": [
+        false
+      ],
+      "parallel_values": [
+        true
+      ],
+      "cache_write_reported_requests": 0,
+      "reasoning_input_items": 119,
+      "reasoning_output_items": 17,
+      "max_visible_input_bytes": 135368,
+      "first_tool_count": 17,
+      "first_tool_schema_bytes": 58535,
+      "first_instructions_bytes": 3578,
+      "first_tool_description_bytes": 42267,
+      "base_instruction_hashes": [
+        "3f48f76f8816ab280dde415d331d99c11362186be20cd04b9dc6cb541333461f"
+      ]
+    },
+    {
+      "run": "grok46-profile-planner-v2",
+      "task": "planner",
+      "comparison": "profile",
+      "model": "grok-4.6",
+      "attempt": 1,
+      "arm": "gpt-efficient",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 155.726,
+          "requests": 6,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 27351
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 198.658,
+          "requests": 7,
+          "initial_reasoning_items": 6,
+          "max_input_tokens": 42219
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 167.263,
+          "requests": 6,
+          "initial_reasoning_items": 10,
+          "max_input_tokens": 58863
+        }
+      ],
+      "claude_tool_histogram": {
+        "Bash": 5,
+        "Read": 10,
+        "Write": 3,
+        "Edit": 6
+      },
+      "multi_tool_responses": 7,
+      "response_tiers": [
+        "default"
+      ],
+      "reasoning_contexts": [
+        ""
+      ],
+      "lite_values": [
+        false
+      ],
+      "parallel_values": [
+        true
+      ],
+      "cache_write_reported_requests": 0,
+      "reasoning_input_items": 140,
+      "reasoning_output_items": 19,
+      "max_visible_input_bytes": 117794,
+      "first_tool_count": 17,
+      "first_tool_schema_bytes": 58535,
+      "first_instructions_bytes": 4966,
+      "first_tool_description_bytes": 42267,
+      "base_instruction_hashes": [
+        "3f48f76f8816ab280dde415d331d99c11362186be20cd04b9dc6cb541333461f"
+      ]
+    },
+    {
+      "run": "astra-profile-queue-v1",
+      "task": "queue",
+      "comparison": "profile",
+      "model": "gpt-6-astra",
+      "attempt": 1,
+      "arm": "gremlord",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 150.163,
+          "requests": 6,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 21697
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 220.635,
+          "requests": 10,
+          "initial_reasoning_items": 4,
+          "max_input_tokens": 39360
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 340.593,
+          "requests": 11,
+          "initial_reasoning_items": 11,
+          "max_input_tokens": 65607
+        }
+      ],
+      "claude_tool_histogram": {
+        "Bash": 9,
+        "Read": 8,
+        "Write": 5,
+        "Edit": 13
+      },
+      "multi_tool_responses": 7,
+      "response_tiers": [
+        "default"
+      ],
+      "reasoning_contexts": [
+        "all_turns"
+      ],
+      "lite_values": [
+        false
+      ],
+      "parallel_values": [
+        true
+      ],
+      "cache_write_reported_requests": 27,
+      "reasoning_input_items": 225,
+      "reasoning_output_items": 33,
+      "max_visible_input_bytes": 206211,
+      "first_tool_count": 17,
+      "first_tool_schema_bytes": 58535,
+      "first_instructions_bytes": 3578,
+      "first_tool_description_bytes": 42267,
+      "base_instruction_hashes": [
+        "61897a1308338cdcda106007e00d2108674ad798522ef88d2b0a64a13600fbd3"
+      ]
+    },
+    {
+      "run": "astra-profile-queue-v1",
+      "task": "queue",
+      "comparison": "profile",
+      "model": "gpt-6-astra",
+      "attempt": 1,
+      "arm": "gpt-efficient",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 146.41,
+          "requests": 6,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 22560
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 320.557,
+          "requests": 11,
+          "initial_reasoning_items": 5,
+          "max_input_tokens": 39106
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 373.955,
+          "requests": 11,
+          "initial_reasoning_items": 11,
+          "max_input_tokens": 55669
+        }
+      ],
+      "claude_tool_histogram": {
+        "Bash": 9,
+        "Read": 7,
+        "Write": 3,
+        "Edit": 14
+      },
+      "multi_tool_responses": 6,
+      "response_tiers": [
+        "default"
+      ],
+      "reasoning_contexts": [
+        "all_turns"
+      ],
+      "lite_values": [
+        false
+      ],
+      "parallel_values": [
+        true
+      ],
+      "cache_write_reported_requests": 28,
+      "reasoning_input_items": 242,
+      "reasoning_output_items": 34,
+      "max_visible_input_bytes": 161937,
+      "first_tool_count": 17,
+      "first_tool_schema_bytes": 58535,
+      "first_instructions_bytes": 4966,
+      "first_tool_description_bytes": 42267,
+      "base_instruction_hashes": [
+        "61897a1308338cdcda106007e00d2108674ad798522ef88d2b0a64a13600fbd3"
+      ]
+    },
+    {
+      "run": "astra-profile-queue-v1",
+      "task": "queue",
+      "comparison": "profile",
+      "model": "gpt-6-astra",
+      "attempt": 2,
+      "arm": "gremlord",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 251.512,
+          "requests": 11,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 28499
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 401.314,
+          "requests": 13,
+          "initial_reasoning_items": 12,
+          "max_input_tokens": 59806
+        },
+        {
+          "turn": 3,
+          "passed": false,
+          "error": "user turn exceeded 8m: context deadline exceeded",
+          "agent_seconds": 480.007,
+          "requests": 18,
+          "initial_reasoning_items": 25,
+          "max_input_tokens": 90142
+        }
+      ],
+      "claude_tool_histogram": {
+        "Bash": 16,
+        "Read": 9,
+        "Write": 5,
+        "Edit": 22
+      },
+      "multi_tool_responses": 7,
+      "response_tiers": [
+        "default"
+      ],
+      "reasoning_contexts": [
+        "all_turns"
+      ],
+      "lite_values": [
+        false
+      ],
+      "parallel_values": [
+        true
+      ],
+      "cache_write_reported_requests": 42,
+      "reasoning_input_items": 944,
+      "reasoning_output_items": 53,
+      "max_visible_input_bytes": 278207,
+      "first_tool_count": 17,
+      "first_tool_schema_bytes": 58535,
+      "first_instructions_bytes": 3578,
+      "first_tool_description_bytes": 42267,
+      "base_instruction_hashes": [
+        "61897a1308338cdcda106007e00d2108674ad798522ef88d2b0a64a13600fbd3"
+      ]
+    },
+    {
+      "run": "astra-profile-queue-v1",
+      "task": "queue",
+      "comparison": "profile",
+      "model": "gpt-6-astra",
+      "attempt": 2,
+      "arm": "gpt-efficient",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 139.062,
+          "requests": 6,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 22508
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 282.659,
+          "requests": 10,
+          "initial_reasoning_items": 7,
+          "max_input_tokens": 41215
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 347.978,
+          "requests": 13,
+          "initial_reasoning_items": 16,
+          "max_input_tokens": 65593
+        }
+      ],
+      "claude_tool_histogram": {
+        "Bash": 14,
+        "Read": 9,
+        "Write": 5,
+        "Edit": 11
+      },
+      "multi_tool_responses": 9,
+      "response_tiers": [
+        "default"
+      ],
+      "reasoning_contexts": [
+        "all_turns"
+      ],
+      "lite_values": [
+        false
+      ],
+      "parallel_values": [
+        true
+      ],
+      "cache_write_reported_requests": 29,
+      "reasoning_input_items": 477,
+      "reasoning_output_items": 39,
+      "max_visible_input_bytes": 185363,
+      "first_tool_count": 17,
+      "first_tool_schema_bytes": 58535,
+      "first_instructions_bytes": 4966,
+      "first_tool_description_bytes": 42267,
+      "base_instruction_hashes": [
+        "61897a1308338cdcda106007e00d2108674ad798522ef88d2b0a64a13600fbd3"
+      ]
+    },
+    {
+      "run": "astra-profile-planner-v1",
+      "task": "planner",
+      "comparison": "profile",
+      "model": "gpt-6-astra",
+      "attempt": 1,
+      "arm": "gremlord",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 90.117,
+          "requests": 6,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 19196
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 110.466,
+          "requests": 5,
+          "initial_reasoning_items": 2,
+          "max_input_tokens": 30161
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 148.622,
+          "requests": 6,
+          "initial_reasoning_items": 3,
+          "max_input_tokens": 48085
+        }
+      ],
+      "claude_tool_histogram": {
+        "Bash": 10,
+        "Read": 6,
+        "Write": 2,
+        "Edit": 5
+      },
+      "multi_tool_responses": 6,
+      "response_tiers": [
+        "default"
+      ],
+      "reasoning_contexts": [
+        "all_turns"
+      ],
+      "lite_values": [
+        false
+      ],
+      "parallel_values": [
+        true
+      ],
+      "cache_write_reported_requests": 17,
+      "reasoning_input_items": 37,
+      "reasoning_output_items": 9,
+      "max_visible_input_bytes": 150103,
+      "first_tool_count": 17,
+      "first_tool_schema_bytes": 58535,
+      "first_instructions_bytes": 3578,
+      "first_tool_description_bytes": 42267,
+      "base_instruction_hashes": [
+        "3f48f76f8816ab280dde415d331d99c11362186be20cd04b9dc6cb541333461f"
+      ]
+    },
+    {
+      "run": "astra-profile-planner-v1",
+      "task": "planner",
+      "comparison": "profile",
+      "model": "gpt-6-astra",
+      "attempt": 1,
+      "arm": "gpt-efficient",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 89.198,
+          "requests": 6,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 19676
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 151.807,
+          "requests": 9,
+          "initial_reasoning_items": 3,
+          "max_input_tokens": 30079
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 144.962,
+          "requests": 5,
+          "initial_reasoning_items": 5,
+          "max_input_tokens": 45049
+        }
+      ],
+      "claude_tool_histogram": {
+        "Bash": 9,
+        "Read": 7,
+        "Write": 3,
+        "Edit": 7
+      },
+      "multi_tool_responses": 6,
+      "response_tiers": [
+        "default"
+      ],
+      "reasoning_contexts": [
+        "all_turns"
+      ],
+      "lite_values": [
+        false
+      ],
+      "parallel_values": [
+        true
+      ],
+      "cache_write_reported_requests": 20,
+      "reasoning_input_items": 67,
+      "reasoning_output_items": 15,
+      "max_visible_input_bytes": 132514,
+      "first_tool_count": 17,
+      "first_tool_schema_bytes": 58535,
+      "first_instructions_bytes": 4966,
+      "first_tool_description_bytes": 42267,
+      "base_instruction_hashes": [
+        "3f48f76f8816ab280dde415d331d99c11362186be20cd04b9dc6cb541333461f"
+      ]
+    },
+    {
+      "run": "astra-native-queue-v2",
+      "task": "queue",
+      "comparison": "native",
+      "model": "gpt-6-astra",
+      "attempt": 1,
+      "arm": "codex",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 175.101,
+          "requests": 7,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 21265
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 185.041,
+          "requests": 6,
+          "initial_reasoning_items": 5,
+          "max_input_tokens": 39690
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 303.684,
+          "requests": 6,
+          "initial_reasoning_items": 12,
+          "max_input_tokens": 61175
+        }
+      ],
+      "claude_tool_histogram": {},
+      "multi_tool_responses": 0,
+      "response_tiers": [
+        "default"
+      ],
+      "reasoning_contexts": [
+        "all_turns"
+      ],
+      "lite_values": [
+        true
+      ],
+      "parallel_values": [
+        false
+      ],
+      "cache_write_reported_requests": 19,
+      "reasoning_input_items": 182,
+      "reasoning_output_items": 27,
+      "max_visible_input_bytes": 241234,
+      "first_tool_count": 0,
+      "first_tool_schema_bytes": 0,
+      "first_instructions_bytes": 0,
+      "first_tool_description_bytes": 0,
+      "base_instruction_hashes": [
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "native_completed_local_event_histogram": {
+        "command_execution": 14,
+        "file_change": 6
+      }
+    },
+    {
+      "run": "astra-native-queue-v2",
+      "task": "queue",
+      "comparison": "native",
+      "model": "gpt-6-astra",
+      "attempt": 1,
+      "arm": "gremlord",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 183.122,
+          "requests": 8,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 25964
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 365.669,
+          "requests": 16,
+          "initial_reasoning_items": 7,
+          "max_input_tokens": 50513
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 355.77,
+          "requests": 12,
+          "initial_reasoning_items": 15,
+          "max_input_tokens": 84401
+        }
+      ],
+      "claude_tool_histogram": {
+        "Bash": 11,
+        "Read": 10,
+        "Write": 5,
+        "Edit": 14
+      },
+      "multi_tool_responses": 3,
+      "response_tiers": [
+        "default"
+      ],
+      "reasoning_contexts": [
+        "all_turns"
+      ],
+      "lite_values": [
+        false
+      ],
+      "parallel_values": [
+        true
+      ],
+      "cache_write_reported_requests": 36,
+      "reasoning_input_items": 399,
+      "reasoning_output_items": 43,
+      "max_visible_input_bytes": 279211,
+      "first_tool_count": 17,
+      "first_tool_schema_bytes": 58535,
+      "first_instructions_bytes": 3578,
+      "first_tool_description_bytes": 42267,
+      "base_instruction_hashes": [
+        "61897a1308338cdcda106007e00d2108674ad798522ef88d2b0a64a13600fbd3"
+      ]
+    },
+    {
+      "run": "astra-native-queue-v2",
+      "task": "queue",
+      "comparison": "native",
+      "model": "gpt-6-astra",
+      "attempt": 2,
+      "arm": "codex",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 183.001,
+          "requests": 7,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 21605
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 227.715,
+          "requests": 6,
+          "initial_reasoning_items": 5,
+          "max_input_tokens": 41804
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 289.332,
+          "requests": 6,
+          "initial_reasoning_items": 14,
+          "max_input_tokens": 63783
+        }
+      ],
+      "claude_tool_histogram": {},
+      "multi_tool_responses": 0,
+      "response_tiers": [
+        "default"
+      ],
+      "reasoning_contexts": [
+        "all_turns"
+      ],
+      "lite_values": [
+        true
+      ],
+      "parallel_values": [
+        false
+      ],
+      "cache_write_reported_requests": 19,
+      "reasoning_input_items": 189,
+      "reasoning_output_items": 26,
+      "max_visible_input_bytes": 244814,
+      "first_tool_count": 0,
+      "first_tool_schema_bytes": 0,
+      "first_instructions_bytes": 0,
+      "first_tool_description_bytes": 0,
+      "base_instruction_hashes": [
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "native_completed_local_event_histogram": {
+        "command_execution": 14,
+        "file_change": 8
+      }
+    },
+    {
+      "run": "astra-native-queue-v2",
+      "task": "queue",
+      "comparison": "native",
+      "model": "gpt-6-astra",
+      "attempt": 2,
+      "arm": "gremlord",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 158.775,
+          "requests": 11,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 24121
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 307.003,
+          "requests": 12,
+          "initial_reasoning_items": 5,
+          "max_input_tokens": 46646
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 371.315,
+          "requests": 17,
+          "initial_reasoning_items": 18,
+          "max_input_tokens": 76877
+        }
+      ],
+      "claude_tool_histogram": {
+        "Bash": 9,
+        "Read": 7,
+        "Write": 5,
+        "Edit": 21
+      },
+      "multi_tool_responses": 4,
+      "response_tiers": [
+        "default"
+      ],
+      "reasoning_contexts": [
+        "all_turns"
+      ],
+      "lite_values": [
+        false
+      ],
+      "parallel_values": [
+        true
+      ],
+      "cache_write_reported_requests": 40,
+      "reasoning_input_items": 616,
+      "reasoning_output_items": 42,
+      "max_visible_input_bytes": 214034,
+      "first_tool_count": 17,
+      "first_tool_schema_bytes": 58535,
+      "first_instructions_bytes": 3578,
+      "first_tool_description_bytes": 42267,
+      "base_instruction_hashes": [
+        "61897a1308338cdcda106007e00d2108674ad798522ef88d2b0a64a13600fbd3"
+      ]
+    },
+    {
+      "run": "astra-native-planner-v3",
+      "task": "planner",
+      "comparison": "native",
+      "model": "gpt-6-astra",
+      "attempt": 1,
+      "arm": "codex",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 76.221,
+          "requests": 5,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 14043
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 83.923,
+          "requests": 5,
+          "initial_reasoning_items": 3,
+          "max_input_tokens": 25254
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 114.123,
+          "requests": 5,
+          "initial_reasoning_items": 7,
+          "max_input_tokens": 40294
+        }
+      ],
+      "claude_tool_histogram": {},
+      "multi_tool_responses": 0,
+      "response_tiers": [
+        "default"
+      ],
+      "reasoning_contexts": [
+        "all_turns"
+      ],
+      "lite_values": [
+        true
+      ],
+      "parallel_values": [
+        false
+      ],
+      "cache_write_reported_requests": 15,
+      "reasoning_input_items": 67,
+      "reasoning_output_items": 12,
+      "max_visible_input_bytes": 171512,
+      "first_tool_count": 0,
+      "first_tool_schema_bytes": 0,
+      "first_instructions_bytes": 0,
+      "first_tool_description_bytes": 0,
+      "base_instruction_hashes": [
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      ],
+      "native_completed_local_event_histogram": {
+        "command_execution": 15,
+        "file_change": 5
+      }
+    },
+    {
+      "run": "astra-native-planner-v3",
+      "task": "planner",
+      "comparison": "native",
+      "model": "gpt-6-astra",
+      "attempt": 1,
+      "arm": "gremlord",
+      "turns": [
+        {
+          "turn": 1,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 113.032,
+          "requests": 6,
+          "initial_reasoning_items": 0,
+          "max_input_tokens": 20347
+        },
+        {
+          "turn": 2,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 200.053,
+          "requests": 9,
+          "initial_reasoning_items": 4,
+          "max_input_tokens": 31155
+        },
+        {
+          "turn": 3,
+          "passed": true,
+          "error": null,
+          "agent_seconds": 143.679,
+          "requests": 5,
+          "initial_reasoning_items": 5,
+          "max_input_tokens": 47880
+        }
+      ],
+      "claude_tool_histogram": {
+        "Bash": 9,
+        "Read": 7,
+        "Write": 3,
+        "Edit": 7
+      },
+      "multi_tool_responses": 6,
+      "response_tiers": [
+        "default"
+      ],
+      "reasoning_contexts": [
+        "all_turns"
+      ],
+      "lite_values": [
+        false
+      ],
+      "parallel_values": [
+        true
+      ],
+      "cache_write_reported_requests": 20,
+      "reasoning_input_items": 79,
+      "reasoning_output_items": 20,
+      "max_visible_input_bytes": 135775,
+      "first_tool_count": 17,
+      "first_tool_schema_bytes": 58535,
+      "first_instructions_bytes": 3578,
+      "first_tool_description_bytes": 42267,
+      "base_instruction_hashes": [
+        "3f48f76f8816ab280dde415d331d99c11362186be20cd04b9dc6cb541333461f"
+      ]
+    }
+  ],
+  "retained_patch_footprints": [
+    {
+      "run": "grok46-profile-queue-v1",
+      "attempt": 1,
+      "arm": "gremlord",
+      "files": [
+        {
+          "file": "test_workqueue.py",
+          "added": 847,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "workqueue.py",
+          "added": 323,
+          "removed": 5,
+          "is_test": false
+        }
+      ],
+      "retained_test_lines_added": 847,
+      "other_lines_added": 323
+    },
+    {
+      "run": "grok46-profile-queue-v1",
+      "attempt": 1,
+      "arm": "gpt-efficient",
+      "files": [
+        {
+          "file": "test_workqueue.py",
+          "added": 799,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "workqueue.py",
+          "added": 293,
+          "removed": 5,
+          "is_test": false
+        }
+      ],
+      "retained_test_lines_added": 799,
+      "other_lines_added": 293
+    },
+    {
+      "run": "grok46-profile-queue-v1",
+      "attempt": 2,
+      "arm": "gremlord",
+      "files": [
+        {
+          "file": "test_workqueue.py",
+          "added": 981,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "workqueue.py",
+          "added": 351,
+          "removed": 5,
+          "is_test": false
+        }
+      ],
+      "retained_test_lines_added": 981,
+      "other_lines_added": 351
+    },
+    {
+      "run": "grok46-profile-queue-v1",
+      "attempt": 2,
+      "arm": "gpt-efficient",
+      "files": [
+        {
+          "file": "test_workqueue.py",
+          "added": 854,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "workqueue.py",
+          "added": 329,
+          "removed": 5,
+          "is_test": false
+        }
+      ],
+      "retained_test_lines_added": 854,
+      "other_lines_added": 329
+    },
+    {
+      "run": "grok46-profile-planner-v2",
+      "attempt": 1,
+      "arm": "gremlord",
+      "files": [
+        {
+          "file": "planner.py",
+          "added": 306,
+          "removed": 2,
+          "is_test": false
+        },
+        {
+          "file": "test_planner.py",
+          "added": 638,
+          "removed": 0,
+          "is_test": true
+        }
+      ],
+      "retained_test_lines_added": 638,
+      "other_lines_added": 306
+    },
+    {
+      "run": "grok46-profile-planner-v2",
+      "attempt": 1,
+      "arm": "gpt-efficient",
+      "files": [
+        {
+          "file": "planner.py",
+          "added": 241,
+          "removed": 2,
+          "is_test": false
+        },
+        {
+          "file": "test_planner.py",
+          "added": 616,
+          "removed": 0,
+          "is_test": true
+        }
+      ],
+      "retained_test_lines_added": 616,
+      "other_lines_added": 241
+    },
+    {
+      "run": "astra-profile-queue-v1",
+      "attempt": 1,
+      "arm": "gremlord",
+      "files": [
+        {
+          "file": "test_workqueue.py",
+          "added": 282,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_workqueue_batches.py",
+          "added": 308,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_workqueue_migration.py",
+          "added": 207,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_workqueue_recovery.py",
+          "added": 356,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "workqueue.py",
+          "added": 255,
+          "removed": 5,
+          "is_test": false
+        }
+      ],
+      "retained_test_lines_added": 1153,
+      "other_lines_added": 255
+    },
+    {
+      "run": "astra-profile-queue-v1",
+      "attempt": 1,
+      "arm": "gpt-efficient",
+      "files": [
+        {
+          "file": "test_workqueue.py",
+          "added": 638,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_workqueue_batches.py",
+          "added": 440,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "workqueue.py",
+          "added": 252,
+          "removed": 5,
+          "is_test": false
+        }
+      ],
+      "retained_test_lines_added": 1078,
+      "other_lines_added": 252
+    },
+    {
+      "run": "astra-profile-queue-v1",
+      "attempt": 2,
+      "arm": "gremlord",
+      "files": [
+        {
+          "file": "README.md",
+          "added": 97,
+          "removed": 24,
+          "is_test": false
+        },
+        {
+          "file": "test_workqueue.py",
+          "added": 349,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_workqueue_batches.py",
+          "added": 552,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_workqueue_recovery.py",
+          "added": 533,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "workqueue.py",
+          "added": 282,
+          "removed": 4,
+          "is_test": false
+        }
+      ],
+      "retained_test_lines_added": 1434,
+      "other_lines_added": 379
+    },
+    {
+      "run": "astra-profile-queue-v1",
+      "attempt": 2,
+      "arm": "gpt-efficient",
+      "files": [
+        {
+          "file": "test_workqueue.py",
+          "added": 286,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_workqueue_batches.py",
+          "added": 347,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_workqueue_migration.py",
+          "added": 186,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_workqueue_recovery.py",
+          "added": 383,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "workqueue.py",
+          "added": 221,
+          "removed": 5,
+          "is_test": false
+        }
+      ],
+      "retained_test_lines_added": 1202,
+      "other_lines_added": 221
+    },
+    {
+      "run": "astra-profile-planner-v1",
+      "attempt": 1,
+      "arm": "gremlord",
+      "files": [
+        {
+          "file": "planner.py",
+          "added": 191,
+          "removed": 3,
+          "is_test": false
+        },
+        {
+          "file": "test_planner.py",
+          "added": 808,
+          "removed": 0,
+          "is_test": true
+        }
+      ],
+      "retained_test_lines_added": 808,
+      "other_lines_added": 191
+    },
+    {
+      "run": "astra-profile-planner-v1",
+      "attempt": 1,
+      "arm": "gpt-efficient",
+      "files": [
+        {
+          "file": "planner.py",
+          "added": 188,
+          "removed": 3,
+          "is_test": false
+        },
+        {
+          "file": "test_planner.py",
+          "added": 420,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_planner_updates.py",
+          "added": 338,
+          "removed": 0,
+          "is_test": true
+        }
+      ],
+      "retained_test_lines_added": 758,
+      "other_lines_added": 188
+    },
+    {
+      "run": "astra-native-queue-v2",
+      "attempt": 1,
+      "arm": "codex",
+      "files": [
+        {
+          "file": "test_workqueue.py",
+          "added": 616,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_workqueue_batches.py",
+          "added": 379,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "workqueue.py",
+          "added": 292,
+          "removed": 5,
+          "is_test": false
+        }
+      ],
+      "retained_test_lines_added": 995,
+      "other_lines_added": 292
+    },
+    {
+      "run": "astra-native-queue-v2",
+      "attempt": 1,
+      "arm": "gremlord",
+      "files": [
+        {
+          "file": "test_batches.py",
+          "added": 351,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_migrations.py",
+          "added": 222,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_recovery.py",
+          "added": 479,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_workqueue.py",
+          "added": 338,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "workqueue.py",
+          "added": 276,
+          "removed": 5,
+          "is_test": false
+        }
+      ],
+      "retained_test_lines_added": 1390,
+      "other_lines_added": 276
+    },
+    {
+      "run": "astra-native-queue-v2",
+      "attempt": 2,
+      "arm": "codex",
+      "files": [
+        {
+          "file": "test_batches.py",
+          "added": 325,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_migrations.py",
+          "added": 162,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_recovery.py",
+          "added": 431,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_workqueue.py",
+          "added": 260,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "workqueue.py",
+          "added": 261,
+          "removed": 5,
+          "is_test": false
+        }
+      ],
+      "retained_test_lines_added": 1178,
+      "other_lines_added": 261
+    },
+    {
+      "run": "astra-native-queue-v2",
+      "attempt": 2,
+      "arm": "gremlord",
+      "files": [
+        {
+          "file": "test_batches.py",
+          "added": 316,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_migration.py",
+          "added": 197,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_recovery.py",
+          "added": 404,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_workqueue.py",
+          "added": 289,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "workqueue.py",
+          "added": 259,
+          "removed": 5,
+          "is_test": false
+        }
+      ],
+      "retained_test_lines_added": 1206,
+      "other_lines_added": 259
+    },
+    {
+      "run": "astra-native-planner-v3",
+      "attempt": 1,
+      "arm": "codex",
+      "files": [
+        {
+          "file": "planner.py",
+          "added": 203,
+          "removed": 3,
+          "is_test": false
+        },
+        {
+          "file": "test_planner.py",
+          "added": 617,
+          "removed": 0,
+          "is_test": true
+        }
+      ],
+      "retained_test_lines_added": 617,
+      "other_lines_added": 203
+    },
+    {
+      "run": "astra-native-planner-v3",
+      "attempt": 1,
+      "arm": "gremlord",
+      "files": [
+        {
+          "file": "planner.py",
+          "added": 193,
+          "removed": 3,
+          "is_test": false
+        },
+        {
+          "file": "test_planner.py",
+          "added": 407,
+          "removed": 0,
+          "is_test": true
+        },
+        {
+          "file": "test_planner_state.py",
+          "added": 334,
+          "removed": 0,
+          "is_test": true
+        }
+      ],
+      "retained_test_lines_added": 741,
+      "other_lines_added": 193
+    }
+  ],
+  "checkpoint_clock_audit": {
+    "method": "Original APFS turn-directory creation to stdout-file creation versus recorded monotonic agent duration; fresh directories, no resume/copies.",
+    "checkpoints_checked": 54,
+    "maximum_absolute_difference_seconds": 0.40572994613646074,
+    "anomalous_checkpoints": [],
+    "checkpoints": [
+      {
+        "run": "grok46-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-001/baseline/turn-01",
+        "wall_seconds": 214.64167833328247,
+        "recorded_agent_seconds": 214.651,
+        "wall_minus_recorded_seconds": -0.009321666717539756
+      },
+      {
+        "run": "grok46-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-001/baseline/turn-02",
+        "wall_seconds": 194.09986400604248,
+        "recorded_agent_seconds": 194.109,
+        "wall_minus_recorded_seconds": -0.009135993957528399
+      },
+      {
+        "run": "grok46-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-001/baseline/turn-03",
+        "wall_seconds": 422.2956488132477,
+        "recorded_agent_seconds": 422.315,
+        "wall_minus_recorded_seconds": -0.019351186752317062
+      },
+      {
+        "run": "grok46-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-001/mut/turn-01",
+        "wall_seconds": 211.56775665283203,
+        "recorded_agent_seconds": 211.577,
+        "wall_minus_recorded_seconds": -0.009243347167966931
+      },
+      {
+        "run": "grok46-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-001/mut/turn-02",
+        "wall_seconds": 201.6709222793579,
+        "recorded_agent_seconds": 201.68,
+        "wall_minus_recorded_seconds": -0.009077720642096665
+      },
+      {
+        "run": "grok46-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-001/mut/turn-03",
+        "wall_seconds": 351.83007073402405,
+        "recorded_agent_seconds": 351.846,
+        "wall_minus_recorded_seconds": -0.015929265975955786
+      },
+      {
+        "run": "grok46-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-002/baseline/turn-01",
+        "wall_seconds": 266.8430874347687,
+        "recorded_agent_seconds": 266.855,
+        "wall_minus_recorded_seconds": -0.011912565231341432
+      },
+      {
+        "run": "grok46-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-002/baseline/turn-02",
+        "wall_seconds": 270.9871816635132,
+        "recorded_agent_seconds": 271.0,
+        "wall_minus_recorded_seconds": -0.012818336486816406
+      },
+      {
+        "run": "grok46-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-002/baseline/turn-03",
+        "wall_seconds": 312.2258303165436,
+        "recorded_agent_seconds": 312.24,
+        "wall_minus_recorded_seconds": -0.014169683456429993
+      },
+      {
+        "run": "grok46-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-002/mut/turn-01",
+        "wall_seconds": 218.91605854034424,
+        "recorded_agent_seconds": 218.926,
+        "wall_minus_recorded_seconds": -0.00994145965574944
+      },
+      {
+        "run": "grok46-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-002/mut/turn-02",
+        "wall_seconds": 212.89672994613647,
+        "recorded_agent_seconds": 212.491,
+        "wall_minus_recorded_seconds": 0.40572994613646074
+      },
+      {
+        "run": "grok46-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-002/mut/turn-03",
+        "wall_seconds": 308.38447523117065,
+        "recorded_agent_seconds": 308.399,
+        "wall_minus_recorded_seconds": -0.014524768829346613
+      },
+      {
+        "run": "grok46-profile-planner-v2",
+        "turn_path": "tasks/dependency_planner/attempt-001/baseline/turn-01",
+        "wall_seconds": 156.1997570991516,
+        "recorded_agent_seconds": 156.199,
+        "wall_minus_recorded_seconds": 0.00075709915159905
+      },
+      {
+        "run": "grok46-profile-planner-v2",
+        "turn_path": "tasks/dependency_planner/attempt-001/baseline/turn-02",
+        "wall_seconds": 236.8853726387024,
+        "recorded_agent_seconds": 236.884,
+        "wall_minus_recorded_seconds": 0.001372638702406448
+      },
+      {
+        "run": "grok46-profile-planner-v2",
+        "turn_path": "tasks/dependency_planner/attempt-001/baseline/turn-03",
+        "wall_seconds": 225.6782910823822,
+        "recorded_agent_seconds": 225.677,
+        "wall_minus_recorded_seconds": 0.0012910823822096518
+      },
+      {
+        "run": "grok46-profile-planner-v2",
+        "turn_path": "tasks/dependency_planner/attempt-001/mut/turn-01",
+        "wall_seconds": 155.72727012634277,
+        "recorded_agent_seconds": 155.726,
+        "wall_minus_recorded_seconds": 0.001270126342774347
+      },
+      {
+        "run": "grok46-profile-planner-v2",
+        "turn_path": "tasks/dependency_planner/attempt-001/mut/turn-02",
+        "wall_seconds": 198.65855813026428,
+        "recorded_agent_seconds": 198.658,
+        "wall_minus_recorded_seconds": 0.0005581302642951869
+      },
+      {
+        "run": "grok46-profile-planner-v2",
+        "turn_path": "tasks/dependency_planner/attempt-001/mut/turn-03",
+        "wall_seconds": 167.26417756080627,
+        "recorded_agent_seconds": 167.263,
+        "wall_minus_recorded_seconds": 0.0011775608062691845
+      },
+      {
+        "run": "astra-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-001/baseline/turn-01",
+        "wall_seconds": 150.16548013687134,
+        "recorded_agent_seconds": 150.163,
+        "wall_minus_recorded_seconds": 0.0024801368713269767
+      },
+      {
+        "run": "astra-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-001/baseline/turn-02",
+        "wall_seconds": 220.6380615234375,
+        "recorded_agent_seconds": 220.635,
+        "wall_minus_recorded_seconds": 0.003061523437509095
+      },
+      {
+        "run": "astra-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-001/baseline/turn-03",
+        "wall_seconds": 340.59711027145386,
+        "recorded_agent_seconds": 340.593,
+        "wall_minus_recorded_seconds": 0.004110271453839687
+      },
+      {
+        "run": "astra-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-001/mut/turn-01",
+        "wall_seconds": 146.41129350662231,
+        "recorded_agent_seconds": 146.41,
+        "wall_minus_recorded_seconds": 0.0012935066223178637
+      },
+      {
+        "run": "astra-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-001/mut/turn-02",
+        "wall_seconds": 320.57216477394104,
+        "recorded_agent_seconds": 320.557,
+        "wall_minus_recorded_seconds": 0.015164773941023668
+      },
+      {
+        "run": "astra-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-001/mut/turn-03",
+        "wall_seconds": 373.9712574481964,
+        "recorded_agent_seconds": 373.955,
+        "wall_minus_recorded_seconds": 0.01625744819642705
+      },
+      {
+        "run": "astra-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-002/baseline/turn-01",
+        "wall_seconds": 251.51493096351624,
+        "recorded_agent_seconds": 251.512,
+        "wall_minus_recorded_seconds": 0.002930963516234897
+      },
+      {
+        "run": "astra-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-002/baseline/turn-02",
+        "wall_seconds": 401.31917572021484,
+        "recorded_agent_seconds": 401.314,
+        "wall_minus_recorded_seconds": 0.005175720214822377
+      },
+      {
+        "run": "astra-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-002/baseline/turn-03",
+        "wall_seconds": 479.99861311912537,
+        "recorded_agent_seconds": 480.007,
+        "wall_minus_recorded_seconds": -0.008386880874638791
+      },
+      {
+        "run": "astra-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-002/mut/turn-01",
+        "wall_seconds": 139.06321740150452,
+        "recorded_agent_seconds": 139.062,
+        "wall_minus_recorded_seconds": 0.0012174015045047781
+      },
+      {
+        "run": "astra-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-002/mut/turn-02",
+        "wall_seconds": 282.66163086891174,
+        "recorded_agent_seconds": 282.659,
+        "wall_minus_recorded_seconds": 0.0026308689117513495
+      },
+      {
+        "run": "astra-profile-queue-v1",
+        "turn_path": "tasks/durable_queue/attempt-002/mut/turn-03",
+        "wall_seconds": 347.9807813167572,
+        "recorded_agent_seconds": 347.978,
+        "wall_minus_recorded_seconds": 0.0027813167571935082
+      },
+      {
+        "run": "astra-profile-planner-v1",
+        "turn_path": "tasks/dependency_planner/attempt-001/baseline/turn-01",
+        "wall_seconds": 90.11797666549683,
+        "recorded_agent_seconds": 90.117,
+        "wall_minus_recorded_seconds": 0.000976665496821738
+      },
+      {
+        "run": "astra-profile-planner-v1",
+        "turn_path": "tasks/dependency_planner/attempt-001/baseline/turn-02",
+        "wall_seconds": 110.46743726730347,
+        "recorded_agent_seconds": 110.466,
+        "wall_minus_recorded_seconds": 0.0014372673034728223
+      },
+      {
+        "run": "astra-profile-planner-v1",
+        "turn_path": "tasks/dependency_planner/attempt-001/baseline/turn-03",
+        "wall_seconds": 148.6230685710907,
+        "recorded_agent_seconds": 148.622,
+        "wall_minus_recorded_seconds": 0.001068571090684145
+      },
+      {
+        "run": "astra-profile-planner-v1",
+        "turn_path": "tasks/dependency_planner/attempt-001/mut/turn-01",
+        "wall_seconds": 89.19962620735168,
+        "recorded_agent_seconds": 89.198,
+        "wall_minus_recorded_seconds": 0.0016262073516912778
+      },
+      {
+        "run": "astra-profile-planner-v1",
+        "turn_path": "tasks/dependency_planner/attempt-001/mut/turn-02",
+        "wall_seconds": 151.80897617340088,
+        "recorded_agent_seconds": 151.807,
+        "wall_minus_recorded_seconds": 0.001976173400890957
+      },
+      {
+        "run": "astra-profile-planner-v1",
+        "turn_path": "tasks/dependency_planner/attempt-001/mut/turn-03",
+        "wall_seconds": 144.9630262851715,
+        "recorded_agent_seconds": 144.962,
+        "wall_minus_recorded_seconds": 0.001026285171519703
+      },
+      {
+        "run": "astra-native-queue-v2",
+        "turn_path": "tasks/durable_queue/attempt-001/baseline/turn-01",
+        "wall_seconds": 175.0961136817932,
+        "recorded_agent_seconds": 175.101,
+        "wall_minus_recorded_seconds": -0.0048863182067862
+      },
+      {
+        "run": "astra-native-queue-v2",
+        "turn_path": "tasks/durable_queue/attempt-001/baseline/turn-02",
+        "wall_seconds": 185.03586649894714,
+        "recorded_agent_seconds": 185.041,
+        "wall_minus_recorded_seconds": -0.005133501052853262
+      },
+      {
+        "run": "astra-native-queue-v2",
+        "turn_path": "tasks/durable_queue/attempt-001/baseline/turn-03",
+        "wall_seconds": 303.67510294914246,
+        "recorded_agent_seconds": 303.684,
+        "wall_minus_recorded_seconds": -0.008897050857569866
+      },
+      {
+        "run": "astra-native-queue-v2",
+        "turn_path": "tasks/durable_queue/attempt-001/mut/turn-01",
+        "wall_seconds": 183.11662364006042,
+        "recorded_agent_seconds": 183.122,
+        "wall_minus_recorded_seconds": -0.0053763599395892925
+      },
+      {
+        "run": "astra-native-queue-v2",
+        "turn_path": "tasks/durable_queue/attempt-001/mut/turn-02",
+        "wall_seconds": 365.65844798088074,
+        "recorded_agent_seconds": 365.669,
+        "wall_minus_recorded_seconds": -0.010552019119245415
+      },
+      {
+        "run": "astra-native-queue-v2",
+        "turn_path": "tasks/durable_queue/attempt-001/mut/turn-03",
+        "wall_seconds": 355.7595191001892,
+        "recorded_agent_seconds": 355.77,
+        "wall_minus_recorded_seconds": -0.010480899810772826
+      },
+      {
+        "run": "astra-native-queue-v2",
+        "turn_path": "tasks/durable_queue/attempt-002/baseline/turn-01",
+        "wall_seconds": 182.99608516693115,
+        "recorded_agent_seconds": 183.001,
+        "wall_minus_recorded_seconds": -0.004914833068852431
+      },
+      {
+        "run": "astra-native-queue-v2",
+        "turn_path": "tasks/durable_queue/attempt-002/baseline/turn-02",
+        "wall_seconds": 227.86115431785583,
+        "recorded_agent_seconds": 227.715,
+        "wall_minus_recorded_seconds": 0.14615431785583155
+      },
+      {
+        "run": "astra-native-queue-v2",
+        "turn_path": "tasks/durable_queue/attempt-002/baseline/turn-03",
+        "wall_seconds": 289.3361325263977,
+        "recorded_agent_seconds": 289.332,
+        "wall_minus_recorded_seconds": 0.004132526397711445
+      },
+      {
+        "run": "astra-native-queue-v2",
+        "turn_path": "tasks/durable_queue/attempt-002/mut/turn-01",
+        "wall_seconds": 158.77752304077148,
+        "recorded_agent_seconds": 158.775,
+        "wall_minus_recorded_seconds": 0.0025230407714786907
+      },
+      {
+        "run": "astra-native-queue-v2",
+        "turn_path": "tasks/durable_queue/attempt-002/mut/turn-02",
+        "wall_seconds": 307.0074472427368,
+        "recorded_agent_seconds": 307.003,
+        "wall_minus_recorded_seconds": 0.004447242736830503
+      },
+      {
+        "run": "astra-native-queue-v2",
+        "turn_path": "tasks/durable_queue/attempt-002/mut/turn-03",
+        "wall_seconds": 371.32059240341187,
+        "recorded_agent_seconds": 371.315,
+        "wall_minus_recorded_seconds": 0.005592403411867508
+      },
+      {
+        "run": "astra-native-planner-v3",
+        "turn_path": "tasks/dependency_planner/attempt-001/baseline/turn-01",
+        "wall_seconds": 76.22275042533875,
+        "recorded_agent_seconds": 76.221,
+        "wall_minus_recorded_seconds": 0.0017504253387414792
+      },
+      {
+        "run": "astra-native-planner-v3",
+        "turn_path": "tasks/dependency_planner/attempt-001/baseline/turn-02",
+        "wall_seconds": 83.92451238632202,
+        "recorded_agent_seconds": 83.923,
+        "wall_minus_recorded_seconds": 0.0015123863220196654
+      },
+      {
+        "run": "astra-native-planner-v3",
+        "turn_path": "tasks/dependency_planner/attempt-001/baseline/turn-03",
+        "wall_seconds": 114.12507796287537,
+        "recorded_agent_seconds": 114.123,
+        "wall_minus_recorded_seconds": 0.0020779628753615498
+      },
+      {
+        "run": "astra-native-planner-v3",
+        "turn_path": "tasks/dependency_planner/attempt-001/mut/turn-01",
+        "wall_seconds": 113.03356504440308,
+        "recorded_agent_seconds": 113.032,
+        "wall_minus_recorded_seconds": 0.0015650444030796962
+      },
+      {
+        "run": "astra-native-planner-v3",
+        "turn_path": "tasks/dependency_planner/attempt-001/mut/turn-02",
+        "wall_seconds": 200.0565311908722,
+        "recorded_agent_seconds": 200.053,
+        "wall_minus_recorded_seconds": 0.0035311908721951113
+      },
+      {
+        "run": "astra-native-planner-v3",
+        "turn_path": "tasks/dependency_planner/attempt-001/mut/turn-03",
+        "wall_seconds": 143.68106317520142,
+        "recorded_agent_seconds": 143.679,
+        "wall_minus_recorded_seconds": 0.0020631752014139693
+      }
+    ]
+  }
+}

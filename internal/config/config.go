@@ -194,6 +194,9 @@ type Model struct {
 	// ReasoningEffort pins a provider-supported effort instead of inferring
 	// it from Claude Code's thinking budget. Requires reasoning: effort.
 	ReasoningEffort string `yaml:"reasoning_effort"`
+	// ExecutionProfile is an opt-in prompt supplement for Responses models.
+	// Empty preserves the caller's instructions without additions.
+	ExecutionProfile string `yaml:"execution_profile,omitempty"`
 	// API overrides the provider's OpenAI-dialect wire format for this
 	// model: chat_completions or responses. Empty inherits the provider
 	// (itself defaulting to chat_completions). openai-backed models only.
@@ -397,6 +400,9 @@ func (c *Config) Validate() error {
 			// A delegated CLI run is a whole agent loop, not a completion —
 			// none of the HTTP/completion knobs apply. ID stays optional and,
 			// when set, is passed as the CLI's model-selection flag.
+			if m.ExecutionProfile != "" {
+				return fmt.Errorf("config: model %q: execution_profile requires an openai Responses model", alias)
+			}
 			if m.Reasoning != "" || m.ReasoningEffort != "" || m.MaxOutput != 0 || m.Pricing != nil || m.ContextWindow != 0 || m.EffectiveContext != 0 || m.API != "" {
 				return fmt.Errorf("config: model %q: reasoning/max_output/pricing/context_window/effective_context/api have no effect on cli providers — remove them", alias)
 			}
@@ -433,6 +439,15 @@ func (c *Config) Validate() error {
 		}
 		if m.ContextWindow < 0 || m.EffectiveContext < 0 {
 			return fmt.Errorf("config: model %q has negative context size", alias)
+		}
+		if m.ExecutionProfile != "" {
+			if m.ExecutionProfile != "gpt-efficient-v1" {
+				return fmt.Errorf("config: model %q has unknown execution_profile %q", alias, m.ExecutionProfile)
+			}
+			route := Resolved{Provider: c.Providers[m.Provider], Model: m}
+			if route.Provider.Type != ProviderOpenAI || route.APIFlavor() != APIResponses {
+				return fmt.Errorf("config: model %q: execution_profile requires an openai Responses model", alias)
+			}
 		}
 		if m.ContextWindow > 0 && m.EffectiveContext > m.ContextWindow {
 			return fmt.Errorf("config: model %q effective_context %d exceeds context_window %d",

@@ -1,5 +1,9 @@
 # GPT-5.6 Sol: Gremlord versus native Codex
 
+For the subsequent Claude Code profile A/B experiment, see
+[GPT execution profile pilot](gpt-profile-results.md). The measurements below
+remain the earlier native-Codex comparison.
+
 Measured locally on 2026-09-15 using Claude Code 2.1.271 and Codex CLI 0.154.0.
 Both used GPT-5.6 Sol, high reasoning, a 600,000-token declared context budget,
 and a 32,768-token per-response output cap. A shared proxy measured actual API

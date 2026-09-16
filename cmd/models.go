@@ -71,14 +71,15 @@ var modelsListCmd = &cobra.Command{
 }
 
 var (
-	modelProvider        string
-	modelID              string
-	modelReasoning       string
-	modelReasoningEffort string
-	modelMaxOutput       int
-	modelCtxWindow       int
-	modelEffective       int
-	modelAPI             string
+	modelProvider         string
+	modelID               string
+	modelReasoning        string
+	modelReasoningEffort  string
+	modelExecutionProfile string
+	modelMaxOutput        int
+	modelCtxWindow        int
+	modelEffective        int
+	modelAPI              string
 )
 
 var modelsAddCmd = &cobra.Command{
@@ -113,6 +114,9 @@ var modelsAddCmd = &cobra.Command{
 		}
 		if modelReasoningEffort != "" {
 			snippet += "reasoning_effort: " + yamlQuote(modelReasoningEffort) + "\n"
+		}
+		if modelExecutionProfile != "" {
+			snippet += "execution_profile: " + yamlQuote(modelExecutionProfile) + "\n"
 		}
 		if modelMaxOutput > 0 {
 			snippet += fmt.Sprintf("max_output: %d\n", modelMaxOutput)
@@ -320,6 +324,7 @@ func init() {
 	modelsAddCmd.Flags().StringVar(&modelID, "id", "", "upstream model id (optional for cli providers)")
 	modelsAddCmd.Flags().StringVar(&modelReasoning, "reasoning", "", "none | effort | passive")
 	modelsAddCmd.Flags().StringVar(&modelReasoningEffort, "reasoning-effort", "", "pin a model-supported effort (requires --reasoning effort)")
+	modelsAddCmd.Flags().StringVar(&modelExecutionProfile, "execution-profile", "", "opt-in Responses execution guidance: gpt-efficient-v1")
 	modelsAddCmd.Flags().IntVar(&modelMaxOutput, "max-output", 0, "clamp max_tokens to this output cap")
 	modelsAddCmd.Flags().IntVar(&modelCtxWindow, "context-window", 0, "model's real input context window in tokens")
 	modelsAddCmd.Flags().IntVar(&modelEffective, "effective-context", 0, "usable context before quality degrades (attention budget)")

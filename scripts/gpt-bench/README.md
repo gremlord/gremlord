@@ -33,8 +33,9 @@ the same tests and tasks; they are repetitions, not six independent problems.
 The driver reuses Gremlord's local eval workspace, pairing, grading, and usage
 pipeline. It invokes the native CLI through an injected executor; it does not
 add inbound Responses support or a Codex mode to the production router. Both
-harnesses have fresh homes, no user customizations/MCP/web/subagents, a 600,000
-token declared context budget, and a 32,768-token per-response output cap.
+harnesses have fresh homes, no user customizations/MCP/web/subagents, a declared
+context budget of 600,000 tokens capped at the configured model window, and a
+32,768-token per-response output cap.
 Claude keeps its standard prompt in safe mode; native Codex keeps its own
 prompt/tools and OpenAI provider identity. Native request and response protocol
 headers (including Responses Lite and turn state) pass through the meter.
@@ -80,3 +81,111 @@ inside the private artifact home to support resume; Claude history and the
 translator's in-memory replay cache remain live across turns. Inspect every
 `turn-*/grade.json`, not just the final candidate score: a later fix must not
 erase an earlier failed stage. This scenario still does not force compaction.
+
+## Execution profile A/B test inside Claude Code
+
+Both arms below run Claude Code through the current backend. The only treatment
+is the versioned `gpt-efficient-v1` supplement. The baseline explicitly disables
+any execution profile configured on the selected model. Model and effort stay
+identical; native Codex remains available as a separate reference arm.
+
+```sh
+/tmp/gremlord-gpt-bench-multiturn \
+  -baseline gremlord -mut gpt-efficient \
+  -manifest .gremlord/evals/queue-fixtures-RUN/manifest.yaml \
+  -sequence .gremlord/evals/queue-fixtures-RUN/sequence.json \
+  -out .gremlord/evals/profile-results-RUN -attempts 2 -timeout 25m
+python3 scripts/gpt-bench/sequence_report.py .gremlord/evals/profile-results-RUN
+```
+
+Generate the separate planner workflow with
+`python3 scripts/gpt-bench/planner.py prepare .gremlord/evals/planner-fixtures-RUN`,
+then use that directory's manifest and sequence in the same command. Freeze
+the profile before running it. Do not tune on its results and still call it
+held out. `sequence_report.py` aggregates repeated attempts and retains missing
+and failed stages, including time spent on execution failures.
+
+The meter records instruction/tool hashes, serialized byte sizes, response-header
+time, and first output-delta time in addition to usage. It asserts the selected
+profile reached the API. The profile text/hash and executable hash are saved in
+the run directory. See [the profile documentation](../../docs/gpt-execution-profile.md).
+
+For another configured model, pass `-model ALIAS`. If its normal route is Chat
+Completions, explicitly add `-api responses` for this run; the user's configuration
+is not rewritten. `-context-budget` defaults to 600,000 and is capped at the
+configured model window (500,000 for Grok 4.6). Both arms use that same budget;
+the artifact records the configured/effective API and requested/effective budget.
+High effort, the response limit, and the exact profile text stay unchanged.
+
+For a fresh native reference, run another pair with `-model gpt-6-astra
+-baseline codex -mut gremlord` on the same manifest/sequence. Each pair gets fresh
+homes and workspaces; do not reuse an existing native conversation. Retain that
+pair's additional Gremlord baseline rather than silently averaging it with the
+separate profile comparison.
+
+The meter records `input_tokens_details.cache_write_tokens` separately when the
+provider returns it. Ordinary input is total input minus cache reads and writes;
+do not charge writes twice. If local pricing omits a write rate, supply a
+benchmark-only override, such as `-cache-write-price 12.5` for GPT-6 Astra at
+the published September 2026 standard rates. The recorded rate and override are
+saved in `environment.json`; the user's pricing configuration is unchanged.
+Requested/returned service tiers are recorded to detect billing-mode differences.
+The meter uses the recorded flat rates; check context-size tiers before treating
+any long-context result as an invoice estimate. Historical runs without the
+write counter priced non-cached input as one bucket and cannot recover its split.
+
+## Grok/Astra matrix and CLI pinning
+
+See the [Grok/Astra results](../../docs/grok-astra-profile-results.md) for the
+same three-turn queue/planner suite on both models and a fresh native Astra
+baseline. The profile remains off by default.
+
+Before a multi-hour matrix, copy the actual standalone Claude and Codex
+executables and Codex's required companion `codex-code-mode-host` from the same
+release into a private directory and prepend that directory to `PATH`.
+Record their version output and SHA-256 hashes. Copy executable files rather
+than global auto-updating symlinks, and verify the hashes again afterward.
+Fresh candidate homes isolate configuration; they do not freeze the CLI binary
+or clear the provider's prompt cache. Run a resumed file-editing preflight with
+external assertions after copying: `--version` alone does not check whether
+native tools can execute. Reject startup errors such as code mode unavailable.
+
+On macOS, prevent idle sleep for a scored run, for example by prefixing the
+benchmark command with `caffeinate -i`. Preserve user power settings. Check wall
+clock against elapsed duration: monotonic timers can pause during suspension,
+while API streams and cache lifetimes continue to advance. Retain and exclude
+sleep-affected comparisons, then rerun the whole pair under stable conditions.
+
+With those pinned executables on `PATH` and fresh fixture/output directories:
+
+```sh
+# Grok profile comparison; benchmark-only API override.
+/tmp/gremlord-gpt-bench-multiturn \
+  -model grok -api responses -baseline gremlord -mut gpt-efficient \
+  -manifest .gremlord/evals/queue-fixtures-RUN/manifest.yaml \
+  -sequence .gremlord/evals/queue-fixtures-RUN/sequence.json \
+  -out .gremlord/evals/grok-profile-queue-RUN -attempts 2 -timeout 25m
+
+# Astra profile comparison with separate cache-write pricing.
+/tmp/gremlord-gpt-bench-multiturn \
+  -model gpt-6-astra -cache-write-price 12.5 \
+  -baseline gremlord -mut gpt-efficient \
+  -manifest .gremlord/evals/queue-fixtures-RUN/manifest.yaml \
+  -sequence .gremlord/evals/queue-fixtures-RUN/sequence.json \
+  -out .gremlord/evals/astra-profile-queue-RUN -attempts 2 -timeout 25m
+
+# Fresh native Astra comparison, including its own Gremlord controls.
+/tmp/gremlord-gpt-bench-multiturn \
+  -model gpt-6-astra -cache-write-price 12.5 \
+  -baseline codex -mut gremlord \
+  -manifest .gremlord/evals/queue-fixtures-RUN/manifest.yaml \
+  -sequence .gremlord/evals/queue-fixtures-RUN/sequence.json \
+  -out .gremlord/evals/astra-native-queue-RUN -attempts 2 -timeout 25m
+```
+
+Repeat each comparison using the planner manifest/sequence, a fresh output
+directory, and `-attempts 1`. Run scored jobs sequentially. Generate
+`sequence_report.py` reports for all six directories. Preserve timeouts and
+interrupted artifacts; compare completed-work speed/cost only when both arms
+pass every cumulative checkpoint and final grade. The fixed seed determines
+arm order; do not choose a favorable repetition after seeing results.
