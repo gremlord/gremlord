@@ -1,6 +1,10 @@
 # Plan: evaluating Codex vs Claude Code as the base harness
 
 Status: proposal, 2026-09-08. Phase 0 implemented 2026-09-08; Phases 1–5 not started.
+Follow-up: `scripts/gpt-bench` provides an isolated local GPT harness pilot using
+the evaluator's injected executor and a shared API meter. It does not implement
+the production harness interface, Docker integration, or inbound Responses
+translation proposed below. See its [run instructions](../scripts/gpt-bench/README.md).
 
 ## The question
 
@@ -9,12 +13,13 @@ OpenAI's Codex CLI is now Apache-2.0, Rust, and has first-class custom
 providers. Is its agent loop a better *harness* than Claude Code's — better
 patches per dollar on the same model — and should gremlord front it too?
 
-Nothing we have today answers this. `gremlord eval` holds Claude Code
+The production `gremlord eval` command holds Claude Code
 constant and varies the model (`internal/eval/eval.go:624`,
 `internal/eval/docker.go:212`). CLI aliases are rejected as candidates
 (`cmd/evalcmd.go:136-146`), and the `codex` provider in `internal/backend/clibe`
 is whole-task delegation from *inside* a Claude Code session — a composed
-system, not native Codex.
+system, not native Codex. The separate synthetic pilot can compare the two
+harnesses on one GPT model; it does not answer the broader migration question.
 
 The answer has to be measured. This plan makes the harness a factor in the
 existing evaluator and describes the experiment that isolates it.
@@ -28,10 +33,13 @@ existing evaluator and describes the experiment that isolates it.
 2. **Harness × model is a crossed design, not a single pair.** A single
    "GPT on Codex vs GPT on Claude Code" run confounds the harness with the
    translation hop: Claude Code reaches OpenAI through gremlord's
-   Messages→Responses translation (which drops replayed thinking, sets
-   parallel tool calls false, omits server tools —
-   `internal/backend/openaibe/responses_request.go`), Codex speaks Responses
-   natively.
+   Messages→Responses translation (which still omits
+   server tools — `internal/backend/openaibe/responses_request.go`), Codex
+   speaks Responses natively. Standard Responses parallel tool calls now
+   default on; Codex's model-specific Responses Lite path uses a different
+   protocol. Encrypted reasoning and assistant phases now round-trip while the
+   translator's session cache matches the visible history. Restart, eviction,
+   and client compaction can reset that state; see [GPT fidelity](gpt-fidelity.md).
 3. **Both harnesses go through the router.** Cost attribution is router
    telemetry keyed by session id (`eval.go:690-732`). A Codex arm pointed
    straight at OpenAI shows $0 and cannot be compared on cost.

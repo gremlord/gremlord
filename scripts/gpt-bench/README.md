@@ -1,0 +1,82 @@
+# Matched GPT harness pilot
+
+This opt-in Unix driver compares **Claude Code through the current Gremlord OpenAI
+Responses backend** with **native `codex exec`**, using the same configured
+upstream model, `high` effort, and a shared metering proxy. It makes billable API
+requests and lets both coding CLIs edit fresh fixture workspaces and execute
+commands. Run only trusted manifests on a development machine.
+
+```sh
+python3 scripts/gpt-bench/fixtures.py prepare .gremlord/evals/fixtures-RUN
+go build -o /tmp/gremlord-gpt-bench ./scripts/gpt-bench
+/tmp/gremlord-gpt-bench \
+  -model gpt-5.6-sol \
+  -manifest .gremlord/evals/fixtures-RUN/manifest.yaml \
+  -out .gremlord/evals/results-RUN -attempts 2 -timeout 6m
+python3 scripts/gpt-bench/report.py .gremlord/evals/results-RUN
+```
+
+Use new directories each time. There is no resume path that could mix different
+code or harness versions. API credentials are read from the local Gremlord
+configuration in the parent process. Child CLIs receive only an ephemeral
+loopback proxy token. The proxy logs usage and counts of encrypted reasoning
+items, never ciphertext or request/response bodies. CLI artifacts can contain
+task data; the artifact root is private and gitignored.
+
+The fixture generator freezes a copy of the external grader and records hashes,
+rejects all three broken starters, and checks all three reference solutions.
+The tasks cover incremental byte-stream parsing, out-of-order transactional
+state updates, and extracting a policy from a 193 KB initial-context dossier.
+Candidate patches and exact verifier output are retained. Repeated attempts use
+the same tests and tasks; they are repetitions, not six independent problems.
+
+The driver reuses Gremlord's local eval workspace, pairing, grading, and usage
+pipeline. It invokes the native CLI through an injected executor; it does not
+add inbound Responses support or a Codex mode to the production router. Both
+harnesses have fresh homes, no user customizations/MCP/web/subagents, a 600,000
+token declared context budget, and a 32,768-token per-response output cap.
+Claude keeps its standard prompt in safe mode; native Codex keeps its own
+prompt/tools and OpenAI provider identity. Native request and response protocol
+headers (including Responses Lite and turn state) pass through the meter.
+Limits: 64 API requests and the specified wall time per candidate.
+The runner kills the candidate's process group on timeout.
+
+This pilot can detect protocol failures and compare task results, latency,
+tokens, and estimated spend. It cannot establish general Codex parity, isolate
+which translator change improved quality, or evaluate native compaction. The
+long-context task is below the configured compaction threshold. For stronger
+quality evidence, run a larger held-out repository benchmark with the official
+graders, repeated trials, and matched hardware/tool access.
+
+## Multi-turn development scenario
+
+The queue scenario resumes the **same conversation and workspace** for three
+separate user turns. Later prompts only supply changed requirements. Each turn
+has an external cumulative verifier, its own patch, and request/usage telemetry.
+No grading feedback is fed to either model between turns. A SQLite database
+created by the first implementation is retained outside the workspace and
+checked again after later changes.
+
+1. Build a durable, idempotent SQLite job queue with atomic claims.
+2. Add expired-lease recovery, fenced tokens, retry limits, renew/release/cancel.
+3. Add atomic batches and migration from a specified legacy schema.
+
+The grader tests concurrent connections, stale-owner rejection, expiry
+boundaries, all-or-nothing batch validation, priority order, duplicate keys,
+reopening the database, and preservation of nonconsecutive legacy IDs.
+
+```sh
+python3 scripts/gpt-bench/complex.py prepare .gremlord/evals/queue-fixtures-RUN
+go build -o /tmp/gremlord-gpt-bench-multiturn ./scripts/gpt-bench
+/tmp/gremlord-gpt-bench-multiturn \
+  -manifest .gremlord/evals/queue-fixtures-RUN/manifest.yaml \
+  -sequence .gremlord/evals/queue-fixtures-RUN/sequence.json \
+  -out .gremlord/evals/queue-results-RUN -attempts 1 -timeout 25m
+python3 scripts/gpt-bench/sequence_report.py .gremlord/evals/queue-results-RUN
+```
+
+Each user turn has an additional eight-minute cap. Native histories are saved
+inside the private artifact home to support resume; Claude history and the
+translator's in-memory replay cache remain live across turns. Inspect every
+`turn-*/grade.json`, not just the final candidate score: a later fix must not
+erase an earlier failed stage. This scenario still does not force compaction.
