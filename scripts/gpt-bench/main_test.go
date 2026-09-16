@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -229,4 +230,40 @@ func testProxy(t *testing.T, url string) (*proxy, string) {
 	}
 	t.Cleanup(func() { log.Close() })
 	return &proxy{route: config.Resolved{Provider: config.Provider{BaseURL: url}, Model: config.Model{ID: "sol"}}, key: "REAL_TEST_KEY", token: "test-token", client: http.DefaultClient, store: db, prices: pricing.Load(dir, nil), log: log, arms: map[string]string{"session": "codex"}, counts: map[string]int{}}, path
+}
+
+func TestMeterPricesCacheWritesWithoutDoubleCounting(t *testing.T) {
+	for _, stream := range []bool{false, true} {
+		t.Run(fmt.Sprint(stream), func(t *testing.T) {
+			response := `{"status":"completed","service_tier":"default","usage":{"input_tokens":1000,"output_tokens":80,"input_tokens_details":{"cached_tokens":900,"cache_write_tokens":60}}}`
+			up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if stream {
+					w.Header().Set("Content-Type", "text/event-stream")
+					fmt.Fprintf(w, "data: {\"type\":\"response.completed\",\"response\":%s}\n\n", response)
+				} else {
+					io.WriteString(w, response)
+				}
+			}))
+			defer up.Close()
+			p, path := testProxy(t, up.URL)
+			p.prices = pricing.Load(t.TempDir(), &config.Config{Pricing: map[string]config.Price{"sol": {Input: 10, CacheRead: 1, CacheWrite: 12.5, Output: 50}}})
+			req := httptest.NewRequest("POST", "/upstream/session/v1/responses", strings.NewReader(`{"model":"sol","reasoning":{"effort":"high"},"service_tier":"auto"}`))
+			req.Header.Set("Authorization", "Bearer test-token")
+			p.ServeHTTP(httptest.NewRecorder(), req)
+			data, _ := os.ReadFile(path)
+			var m measurement
+			json.Unmarshal(bytes.TrimSpace(data), &m)
+			if m.CacheWrite != 60 || !m.CacheWriteReported || m.ServiceTier != "default" || m.RequestedServiceTier != "auto" {
+				t.Fatalf("lost cache write/tier telemetry: %+v", m)
+			}
+			rows, err := p.store.SessionUsage("session")
+			if err != nil || len(rows) != 1 {
+				t.Fatalf("usage rows: %v %v", rows, err)
+			}
+			u := rows[0]
+			if u.InputTokens != 40 || u.CacheReadTokens != 900 || u.CacheWriteTokens != 60 || math.Abs(u.CostUSD-.00605) > 1e-10 {
+				t.Fatalf("wrong billing partitions: %+v", u)
+			}
+		})
+	}
 }

@@ -121,3 +121,14 @@ For a fresh native reference, run another pair with `-model gpt-6-astra
 homes and workspaces; do not reuse an existing native conversation. Retain that
 pair's additional Gremlord baseline rather than silently averaging it with the
 separate profile comparison.
+
+The meter records `input_tokens_details.cache_write_tokens` separately when the
+provider returns it. Ordinary input is total input minus cache reads and writes;
+do not charge writes twice. If local pricing omits a write rate, supply a
+benchmark-only override, such as `-cache-write-price 12.5` for GPT-6 Astra at
+the published September 2026 standard rates. The recorded rate and override are
+saved in `environment.json`; the user's pricing configuration is unchanged.
+Requested/returned service tiers are recorded to detect billing-mode differences.
+The meter uses the recorded flat rates; check context-size tiers before treating
+any long-context result as an invoice estimate. Historical runs without the
+write counter priced non-cached input as one bucket and cannot recover its split.

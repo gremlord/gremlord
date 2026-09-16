@@ -27,7 +27,7 @@ class ReportTests(unittest.TestCase):
                         directory=root/'tasks'/'workflow'/f'attempt-{attempt:03d}'/label/f'turn-{turn:02d}'
                         directory.mkdir(parents=True)
                         (directory/'grade.json').write_text(json.dumps(dict(turn=turn,passed=True,agent_ms=1000)))
-                        rows.append(dict(session=sid,arm=arm,request=turn,turn=turn,status=200,duration_ms=500,response_status='' if broken else 'completed'))
+                        rows.append(dict(session=sid,arm=arm,request=turn,turn=turn,status=200,duration_ms=500,response_status='' if broken else 'completed',cache_write_tokens=6))
                 pairs.append(pair)
             (root/'summary.json').write_text(json.dumps(dict(pairs=pairs)))
             (root/'requests.jsonl').write_text('\n'.join(map(json.dumps,rows)))
@@ -41,6 +41,8 @@ class ReportTests(unittest.TestCase):
             self.assertEqual(metrics['arms']['gpt-efficient']['agent_seconds'],5)
             self.assertEqual(metrics['arms']['gpt-efficient']['unknown_usage_requests'],1)
             self.assertEqual(metrics['arms']['gremlord']['unknown_usage_requests'],0)
+            self.assertEqual(metrics['arms']['gremlord']['cache_write_tokens'],24)
+            self.assertEqual(metrics['arms']['gpt-efficient']['cache_write_tokens'],18)
             self.assertIn('missing',text)
             self.assertIn('≥ 0.2000',text)
             (root/'EXCLUDED.json').write_text('{}')

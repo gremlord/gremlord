@@ -35,7 +35,7 @@ def report(root):
                         status=c["status"], final_passed=c["verifier"]["passed"],
                         api_errors=sum(bool(r.get("error")) or r["status"] != 200 for r in rr),
                         unknown_usage_requests=sum(r["status"] == 200 and not r.get("response_status") for r in rr))
-            for field in ["input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens", "tool_calls"]:
+            for field in ["input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens", "reasoning_tokens", "tool_calls"]:
                 item[field] = sum(r.get(field, 0) for r in rr)
             item["upstream_seconds"] = sum(r["duration_ms"] for r in rr) / 1000
             outputs = [r["first_output_ms"] / 1000 for r in rr if r.get("first_output_ms") is not None]
@@ -43,7 +43,7 @@ def report(root):
             candidates.append(item)
             m = metrics.setdefault(arm, dict(attempts=0, workflows_passed=0, checkpoints_passed=0,
                     checkpoints_expected=0, agent_seconds=0, estimated_usd=0, requests=0,
-                    api_errors=0, unknown_usage_requests=0, input_tokens=0, cached_input_tokens=0, output_tokens=0,
+                    api_errors=0, unknown_usage_requests=0, input_tokens=0, cached_input_tokens=0, cache_write_tokens=0, output_tokens=0,
                     reasoning_tokens=0, tool_calls=0, upstream_seconds=0))
             m["attempts"] += 1
             m["workflows_passed"] += c["status"] == "complete" and c["verifier"]["passed"] and passed == turns
@@ -66,7 +66,7 @@ def report(root):
     lines += ["", "| Arm | Task | Attempt | User turn | Cumulative checks | Seconds | Requests | Encrypted reasoning items on first request |",
               "| --- | --- | --- | --- | --- | --- | --- | --- |"] + detail
     lines += ["", "All repetitions are included above. A later successful turn cannot erase a failed earlier checkpoint. Follow-up prompts contain changed requirements; grader feedback is not sent to the models. Identical model/effort, isolated homes/workspaces, and frozen external graders are used for both arms.",
-              "", "Input includes cached tokens once; output includes reasoning. Costs use the recorded local rates and are estimates, not invoices. First-output time means the first nonempty upstream delta (text, summary, or tool arguments), not an invisible reasoning token. API durations include networking and streaming. Instruction/description bytes count decoded UTF-8; tool schemas, parameter schemas, and visible input count serialized JSON. None are token estimates.",
+              "", "Input includes cache reads and writes once; output includes reasoning. Cache writes are priced separately when the meter records them. Costs use the recorded local rates and are estimates, not invoices. First-output time means the first nonempty upstream delta (text, summary, or tool arguments), not an invisible reasoning token. API durations include networking and streaming. Instruction/description bytes count decoded UTF-8; tool schemas, parameter schemas, and visible input count serialized JSON. None are token estimates.",
               "", "A ≥ cost has incomplete metering: an interrupted successful HTTP stream returned no terminal usage. The recorded spend omits that request's unknown billed tokens. Timed-out workflows also completed less work, so their raw time/cost cannot be compared as successful-completion latency/cost. Cancellations are retained in request-error counts.",
               "", "Repeated attempts of a workflow are not independent tasks. No general parity or compaction claim follows from this run. Inspect requests.jsonl, per-turn grades/patches, and environment.json for evidence.", ""]
     (root / "report.md").write_text("\n".join(lines))

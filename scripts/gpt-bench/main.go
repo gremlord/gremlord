@@ -17,6 +17,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -59,6 +60,10 @@ type measurement struct {
 	ExecutionProfile          string `json:"execution_profile,omitempty"`
 	Input                     int64  `json:"input_tokens"`
 	Cached                    int64  `json:"cached_input_tokens"`
+	CacheWrite                int64  `json:"cache_write_tokens"`
+	CacheWriteReported        bool   `json:"cache_write_reported"`
+	RequestedServiceTier      string `json:"requested_service_tier"`
+	ServiceTier               string `json:"service_tier"`
 	Output                    int64  `json:"output_tokens"`
 	Reasoning                 int64  `json:"reasoning_tokens"`
 	EncryptedInput            int    `json:"encrypted_reasoning_input_items"`
@@ -101,6 +106,7 @@ func run() error {
 	alias := flag.String("model", "gpt-5.6-sol", "configured Responses alias")
 	api := flag.String("api", "", "optional benchmark-only API override: responses")
 	contextBudget := flag.Int("context-budget", 600000, "declared input budget, capped by the configured model window")
+	cacheWritePrice := flag.Float64("cache-write-price", -1, "benchmark-only cache-write USD per million tokens; -1 uses local pricing")
 	attempts := flag.Int("attempts", 2, "paired repetitions per task")
 	timeout := flag.Duration("timeout", 6*time.Minute, "time limit per candidate")
 	seed := flag.Uint64("seed", 20260915, "paired launch-order seed")
@@ -108,6 +114,9 @@ func run() error {
 	baseline := flag.String("baseline", "codex", "baseline arm: codex, gremlord, or gpt-efficient")
 	mut := flag.String("mut", "gremlord", "comparison arm: codex, gremlord, or gpt-efficient")
 	flag.Parse()
+	if math.IsNaN(*cacheWritePrice) || math.IsInf(*cacheWritePrice, 0) || (*cacheWritePrice < 0 && *cacheWritePrice != -1) {
+		return errors.New("cache-write-price must be nonnegative, or -1 to use local pricing")
+	}
 	if err := validateArms(*baseline, *mut); err != nil {
 		return err
 	}
@@ -182,7 +191,16 @@ func run() error {
 	if _, err := rand.Read(tokenBytes); err != nil {
 		return err
 	}
-	p := &proxy{route: route, key: route.Provider.Key(), token: hex.EncodeToString(tokenBytes), backend: openaibe.New(), client: &http.Client{Transport: backend.NewTransport()}, store: db, prices: pricing.Load(dataDir, cfg), log: log, arms: map[string]string{}, counts: map[string]int{}}
+	prices := pricing.Load(dataDir, cfg)
+	if *cacheWritePrice >= 0 {
+		price, priced := prices.Get(route.Model.ID)
+		if !priced {
+			return errors.New("cache-write-price requires configured input/output pricing")
+		}
+		price.CacheWrite = *cacheWritePrice
+		prices = pricing.Load(dataDir, &config.Config{Pricing: map[string]config.Price{route.Model.ID: price}})
+	}
+	p := &proxy{route: route, key: route.Provider.Key(), token: hex.EncodeToString(tokenBytes), backend: openaibe.New(), client: &http.Client{Transport: backend.NewTransport()}, store: db, prices: prices, log: log, arms: map[string]string{}, counts: map[string]int{}}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return err
@@ -203,6 +221,11 @@ func run() error {
 	price, priced := p.prices.Get(route.Model.ID)
 	meta := map[string]any{"model": route.Model.ID, "effort": "high", "context_budget": route.Model.ContextBudget(), "max_output_tokens_per_request": 32768, "max_requests_per_candidate": 64, "seed": *seed, "attempts": *attempts, "timeout": timeout.String(), "claude_version": version(claude), "codex_version": version(codex), "manifest_sha256": fmt.Sprintf("%x", sha256.Sum256(manifestBytes)), "price_per_million": price, "priced": priced, "price_source": "local Gremlord pricing table; estimates, not invoices", "git_head": commandOutput("git", "rev-parse", "HEAD"), "git_diff_sha256": fmt.Sprintf("%x", sha256.Sum256([]byte(commandOutput("git", "diff", "HEAD")))), "scope": "local synthetic coding pilot; native harnesses, no web/MCP/subagents; not a compaction or parity proof"}
 	meta["user_turns_per_candidate"] = max(1, len(sequence))
+	meta["meter_version"] = "cache-write-v1"
+	if *cacheWritePrice >= 0 {
+		meta["cache_write_price_override"] = *cacheWritePrice
+		meta["price_source"] = "local Gremlord rates with explicit benchmark-only cache-write override; estimates, not invoices"
+	}
 	meta["requested_context_budget"] = *contextBudget
 	meta["configured_api"], meta["effective_api"] = configuredAPI, route.APIFlavor()
 	meta["baseline"], meta["mut"] = *baseline, *mut
@@ -344,6 +367,7 @@ func (p *proxy) upstream(w http.ResponseWriter, r *http.Request) {
 	m.Effort = reasoning.Effort
 	m.ReasoningContext = reasoning.Context
 	json.Unmarshal(body["parallel_tool_calls"], &m.Parallel)
+	json.Unmarshal(body["service_tier"], &m.RequestedServiceTier)
 	measureInput(body, &m)
 	var instructions string
 	json.Unmarshal(body["instructions"], &instructions)
@@ -467,8 +491,9 @@ func (p *proxy) upstream(w http.ResponseWriter, r *http.Request) {
 
 func measureResponse(data []byte, m *measurement) {
 	var response struct {
-		Status    string `json:"status"`
-		Reasoning struct {
+		Status      string `json:"status"`
+		ServiceTier string `json:"service_tier"`
+		Reasoning   struct {
 			Context string `json:"context"`
 		} `json:"reasoning"`
 		Error json.RawMessage `json:"error"`
@@ -476,7 +501,8 @@ func measureResponse(data []byte, m *measurement) {
 			Input        int64 `json:"input_tokens"`
 			Output       int64 `json:"output_tokens"`
 			InputDetails struct {
-				Cached int64 `json:"cached_tokens"`
+				Cached     int64  `json:"cached_tokens"`
+				CacheWrite *int64 `json:"cache_write_tokens"`
 			} `json:"input_tokens_details"`
 			OutputDetails struct {
 				Reasoning int64 `json:"reasoning_tokens"`
@@ -492,6 +518,11 @@ func measureResponse(data []byte, m *measurement) {
 		return
 	}
 	m.ResponseStatus = response.Status
+	m.ServiceTier = response.ServiceTier
+	if response.Usage.InputDetails.CacheWrite != nil {
+		m.CacheWriteReported = true
+		m.CacheWrite = *response.Usage.InputDetails.CacheWrite
+	}
 	m.EffectiveReasoningContext = response.Reasoning.Context
 	m.Input, m.Output, m.Cached, m.Reasoning = response.Usage.Input, response.Usage.Output, response.Usage.InputDetails.Cached, response.Usage.OutputDetails.Reasoning
 	for _, it := range response.Output {
@@ -508,12 +539,13 @@ func measureResponse(data []byte, m *measurement) {
 }
 
 func (p *proxy) record(m measurement) {
-	cost, priced := p.prices.Cost(p.route.Model.ID, m.Input-m.Cached, m.Output, m.Cached, 0)
+	ordinaryInput := m.Input - m.Cached - m.CacheWrite
+	cost, priced := p.prices.Cost(p.route.Model.ID, ordinaryInput, m.Output, m.Cached, m.CacheWrite)
 	errType := ""
 	if m.Error != "" {
 		errType = "benchmark_upstream_error"
 	}
-	err := p.store.RecordUsage(store.UsageEvent{TS: time.Now(), SessionID: m.Session, Profile: "gpt-bench", Provider: p.route.ProviderName, Model: p.route.Model.ID, Alias: m.Arm, InputTokens: m.Input - m.Cached, OutputTokens: m.Output, CacheReadTokens: m.Cached, CostUSD: cost, Priced: priced, Status: m.Status, ErrType: errType, DurationMS: m.DurationMS, CtxBudget: p.route.Model.ContextBudget()})
+	err := p.store.RecordUsage(store.UsageEvent{TS: time.Now(), SessionID: m.Session, Profile: "gpt-bench", Provider: p.route.ProviderName, Model: p.route.Model.ID, Alias: m.Arm, InputTokens: ordinaryInput, OutputTokens: m.Output, CacheReadTokens: m.Cached, CacheWriteTokens: m.CacheWrite, CostUSD: cost, Priced: priced, Status: m.Status, ErrType: errType, DurationMS: m.DurationMS, CtxBudget: p.route.Model.ContextBudget()})
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if err != nil {
