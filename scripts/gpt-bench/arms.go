@@ -9,7 +9,31 @@ import (
 	"strings"
 
 	"github.com/gremlord/gremlord/internal/backend/openaibe"
+	"github.com/gremlord/gremlord/internal/config"
 )
+
+// benchmarkRoute only changes this run's copy; never rewrite the user's config.
+func benchmarkRoute(route config.Resolved, api string, budget int) (config.Resolved, error) {
+	if api != "" && api != config.APIResponses {
+		return route, fmt.Errorf("benchmark API override must be responses")
+	}
+	if api != "" {
+		route.Model.API = api
+	}
+	if route.Provider.Type != config.ProviderOpenAI || route.APIFlavor() != config.APIResponses {
+		return route, fmt.Errorf("benchmark requires an OpenAI-compatible Responses route; use -api responses to override this run")
+	}
+	if budget <= 0 {
+		return route, fmt.Errorf("context budget must be positive")
+	}
+	if route.Model.ContextWindow > 0 {
+		budget = min(budget, route.Model.ContextWindow)
+	}
+	route.Model.Reasoning, route.Model.ReasoningEffort = "effort", "high"
+	route.Model.ExecutionProfile = ""
+	route.Model.EffectiveContext = budget
+	return route, nil
+}
 
 func claudeArm(arm string) bool { return arm == "gremlord" || arm == "gpt-efficient" }
 

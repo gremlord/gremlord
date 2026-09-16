@@ -20,6 +20,37 @@ import (
 	"github.com/gremlord/gremlord/internal/store"
 )
 
+func TestBenchmarkRouteOverrideAndBudget(t *testing.T) {
+	configured := config.Resolved{Provider: config.Provider{Type: config.ProviderOpenAI}, Model: config.Model{ContextWindow: 500000, ExecutionProfile: "gpt-efficient-v1"}}
+	if _, err := benchmarkRoute(configured, "", 600000); err == nil {
+		t.Fatal("silently changed a Chat Completions route")
+	}
+	route, err := benchmarkRoute(configured, config.APIResponses, 600000)
+	if err != nil || route.APIFlavor() != config.APIResponses || route.Model.ContextBudget() != 500000 || route.Model.ExecutionProfile != "" || route.Model.ReasoningEffort != "high" {
+		t.Fatalf("bad benchmark route: %+v %v", route, err)
+	}
+	if configured.Model.API != "" || configured.Model.EffectiveContext != 0 || configured.Model.ExecutionProfile != "gpt-efficient-v1" {
+		t.Fatal("changed caller's configured route")
+	}
+	route.Model.ContextWindow = 1050000
+	for _, budget := range []int{600000, 300000} {
+		got, err := benchmarkRoute(route, "", budget)
+		if err != nil || got.Model.ContextBudget() != budget {
+			t.Fatalf("budget %d: %+v %v", budget, got, err)
+		}
+	}
+	if _, err := benchmarkRoute(route, "", 0); err == nil {
+		t.Fatal("accepted zero budget")
+	}
+	if _, err := benchmarkRoute(route, config.APIChatCompletions, 600000); err == nil {
+		t.Fatal("accepted unsupported override")
+	}
+	route.Provider.Type = config.ProviderAnthropic
+	if _, err := benchmarkRoute(route, config.APIResponses, 600000); err == nil {
+		t.Fatal("overrode a non-OpenAI-compatible provider")
+	}
+}
+
 // The shared meter is part of the experiment: verify that it preserves the
 // wire payload, keeps credentials out of artifacts, and counts cached input
 // separately rather than adding it to total input twice.

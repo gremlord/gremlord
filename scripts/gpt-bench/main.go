@@ -99,6 +99,8 @@ func run() error {
 	manifestPath := flag.String("manifest", "", "local eval manifest (required)")
 	out := flag.String("out", "", "new artifact directory (required; no resume)")
 	alias := flag.String("model", "gpt-5.6-sol", "configured Responses alias")
+	api := flag.String("api", "", "optional benchmark-only API override: responses")
+	contextBudget := flag.Int("context-budget", 600000, "declared input budget, capped by the configured model window")
 	attempts := flag.Int("attempts", 2, "paired repetitions per task")
 	timeout := flag.Duration("timeout", 6*time.Minute, "time limit per candidate")
 	seed := flag.Uint64("seed", 20260915, "paired launch-order seed")
@@ -147,15 +149,14 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if route.Provider.Type != config.ProviderOpenAI || route.APIFlavor() != config.APIResponses {
-		return errors.New("benchmark requires an OpenAI Responses alias")
+	configuredAPI := route.APIFlavor()
+	route, err = benchmarkRoute(route, *api, *contextBudget)
+	if err != nil {
+		return err
 	}
 	if route.Provider.Key() == "" {
 		return errors.New("configured provider has no key")
 	}
-	route.Model.Reasoning, route.Model.ReasoningEffort = "effort", "high"
-	route.Model.ExecutionProfile = "" // only the selected arm may enable it
-	route.Model.EffectiveContext = 600000
 	claude, err := exec.LookPath("claude")
 	if err != nil {
 		return err
@@ -200,8 +201,10 @@ func run() error {
 		return err
 	}
 	price, priced := p.prices.Get(route.Model.ID)
-	meta := map[string]any{"model": route.Model.ID, "effort": "high", "context_budget": 600000, "max_output_tokens_per_request": 32768, "max_requests_per_candidate": 64, "seed": *seed, "attempts": *attempts, "timeout": timeout.String(), "claude_version": version(claude), "codex_version": version(codex), "manifest_sha256": fmt.Sprintf("%x", sha256.Sum256(manifestBytes)), "price_per_million": price, "priced": priced, "price_source": "local Gremlord pricing table; estimates, not invoices", "git_head": commandOutput("git", "rev-parse", "HEAD"), "git_diff_sha256": fmt.Sprintf("%x", sha256.Sum256([]byte(commandOutput("git", "diff", "HEAD")))), "scope": "local synthetic coding pilot; native harnesses, no web/MCP/subagents; not a compaction or parity proof"}
+	meta := map[string]any{"model": route.Model.ID, "effort": "high", "context_budget": route.Model.ContextBudget(), "max_output_tokens_per_request": 32768, "max_requests_per_candidate": 64, "seed": *seed, "attempts": *attempts, "timeout": timeout.String(), "claude_version": version(claude), "codex_version": version(codex), "manifest_sha256": fmt.Sprintf("%x", sha256.Sum256(manifestBytes)), "price_per_million": price, "priced": priced, "price_source": "local Gremlord pricing table; estimates, not invoices", "git_head": commandOutput("git", "rev-parse", "HEAD"), "git_diff_sha256": fmt.Sprintf("%x", sha256.Sum256([]byte(commandOutput("git", "diff", "HEAD")))), "scope": "local synthetic coding pilot; native harnesses, no web/MCP/subagents; not a compaction or parity proof"}
 	meta["user_turns_per_candidate"] = max(1, len(sequence))
+	meta["requested_context_budget"] = *contextBudget
+	meta["configured_api"], meta["effective_api"] = configuredAPI, route.APIFlavor()
 	meta["baseline"], meta["mut"] = *baseline, *mut
 	meta["execution_profile_sha256"] = fmt.Sprintf("%x", sha256.Sum256([]byte(openaibe.GPTEfficientPrompt)))
 	if err := os.WriteFile(filepath.Join(absOut, "execution-profile.txt"), []byte(openaibe.GPTEfficientPrompt), 0600); err != nil {
@@ -510,7 +513,7 @@ func (p *proxy) record(m measurement) {
 	if m.Error != "" {
 		errType = "benchmark_upstream_error"
 	}
-	err := p.store.RecordUsage(store.UsageEvent{TS: time.Now(), SessionID: m.Session, Profile: "gpt-bench", Provider: p.route.ProviderName, Model: p.route.Model.ID, Alias: m.Arm, InputTokens: m.Input - m.Cached, OutputTokens: m.Output, CacheReadTokens: m.Cached, CostUSD: cost, Priced: priced, Status: m.Status, ErrType: errType, DurationMS: m.DurationMS, CtxBudget: 600000})
+	err := p.store.RecordUsage(store.UsageEvent{TS: time.Now(), SessionID: m.Session, Profile: "gpt-bench", Provider: p.route.ProviderName, Model: p.route.Model.ID, Alias: m.Arm, InputTokens: m.Input - m.Cached, OutputTokens: m.Output, CacheReadTokens: m.Cached, CostUSD: cost, Priced: priced, Status: m.Status, ErrType: errType, DurationMS: m.DurationMS, CtxBudget: p.route.Model.ContextBudget()})
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if err != nil {
@@ -612,7 +615,7 @@ func (e *executor) runTurn(ctx context.Context, dir string, env, argv []string, 
 	if state == nil || state.turn == 1 {
 		args = append(args, "-C", dir)
 	}
-	overrides := []string{`model_provider="bench"`, `model_providers.bench.name="OpenAI"`, `model_providers.bench.base_url="` + e.proxy.url + "/upstream/" + sid + `/v1"`, `model_providers.bench.env_key="GREMLORD_BENCH_TOKEN"`, `model_providers.bench.wire_api="responses"`, `model_providers.bench.requires_openai_auth=false`, `model_providers.bench.request_max_retries=1`, `model_providers.bench.stream_max_retries=1`, `model_reasoning_effort="high"`, `model_context_window=600000`, `model_auto_compact_token_limit=540000`, `web_search="disabled"`, `agents.enabled=false`, `features.multi_agent=false`, `features.multi_agent_v2=false`, `features.responses_websockets=false`, `features.responses_websockets_v2=false`, `features.request_compression=false`, `features.skills=false`, `features.apps=false`, `features.plugins=false`, `shell_environment_policy.inherit="all"`}
+	overrides := []string{`model_provider="bench"`, `model_providers.bench.name="OpenAI"`, `model_providers.bench.base_url="` + e.proxy.url + "/upstream/" + sid + `/v1"`, `model_providers.bench.env_key="GREMLORD_BENCH_TOKEN"`, `model_providers.bench.wire_api="responses"`, `model_providers.bench.requires_openai_auth=false`, `model_providers.bench.request_max_retries=1`, `model_providers.bench.stream_max_retries=1`, `model_reasoning_effort="high"`, fmt.Sprintf("model_context_window=%d", e.proxy.route.Model.ContextBudget()), fmt.Sprintf("model_auto_compact_token_limit=%d", e.proxy.route.Model.ContextBudget()*9/10), `web_search="disabled"`, `agents.enabled=false`, `features.multi_agent=false`, `features.multi_agent_v2=false`, `features.responses_websockets=false`, `features.responses_websockets_v2=false`, `features.request_compression=false`, `features.skills=false`, `features.apps=false`, `features.plugins=false`, `shell_environment_policy.inherit="all"`}
 	for _, c := range overrides {
 		args = append(args, "-c", c)
 	}

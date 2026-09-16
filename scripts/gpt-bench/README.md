@@ -108,3 +108,16 @@ The meter records instruction/tool hashes, serialized byte sizes, response-heade
 time, and first output-delta time in addition to usage. It asserts the selected
 profile reached the API. The profile text/hash and executable hash are saved in
 the run directory. See [the profile documentation](../../docs/gpt-execution-profile.md).
+
+For another configured model, pass `-model ALIAS`. If its normal route is Chat
+Completions, explicitly add `-api responses` for this run; the user's configuration
+is not rewritten. `-context-budget` defaults to 600,000 and is capped at the
+configured model window (500,000 for Grok 4.6). Both arms use that same budget;
+the artifact records the configured/effective API and requested/effective budget.
+High effort, the response limit, and the exact profile text stay unchanged.
+
+For a fresh native reference, run another pair with `-model gpt-6-astra
+-baseline codex -mut gremlord` on the same manifest/sequence. Each pair gets fresh
+homes and workspaces; do not reuse an existing native conversation. Retain that
+pair's additional Gremlord baseline rather than silently averaging it with the
+separate profile comparison.
