@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gremlord/gremlord/internal/backend/openaibe"
 	"github.com/gremlord/gremlord/internal/config"
 	"github.com/gremlord/gremlord/internal/pricing"
 	"github.com/gremlord/gremlord/internal/store"
@@ -113,6 +114,55 @@ func TestMeterUnterminatedStreamIsAnError(t *testing.T) {
 	json.Unmarshal(bytes.TrimSpace(data), &m)
 	if !strings.Contains(m.Error, "without final response") {
 		t.Fatalf("unmetered EOF: %+v", m)
+	}
+}
+
+func TestExecutionProfileArmsAndTelemetry(t *testing.T) {
+	if validateArms("gremlord", "gpt-efficient") != nil || validateArms("codex", "gpt-efficient") != nil || validateArms("typo", "gremlord") == nil || validateArms("gremlord", "gremlord") == nil {
+		t.Fatal("invalid arm selection")
+	}
+	for _, arm := range []string{"gremlord", "gpt-efficient"} {
+		t.Run(arm, func(t *testing.T) {
+			up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "text/event-stream")
+				fmt.Fprint(w, "data: {\"type\":\"response.created\"}\n\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"ok\"}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n")
+			}))
+			defer up.Close()
+			p, logPath := testProxy(t, up.URL)
+			p.arms["session"] = arm
+			for _, withProfile := range []bool{false, true} {
+				instructions := "PRIVATE_SYSTEM"
+				if withProfile {
+					instructions += openaibe.GPTEfficientPrompt
+				}
+				payload := map[string]any{"model": "sol", "reasoning": map[string]string{"effort": "high"}, "instructions": instructions, "tools": []any{}, "input": []any{map[string]string{"type": "reasoning", "encrypted_content": "PRIVATE_CIPHER"}, map[string]string{"type": "message", "content": "PRIVATE_VISIBLE"}}}
+				data, _ := json.Marshal(payload)
+				req := httptest.NewRequest("POST", "/upstream/session/v1/responses", bytes.NewReader(data))
+				req.Header.Set("Authorization", "Bearer test-token")
+				rec := httptest.NewRecorder()
+				p.ServeHTTP(rec, req)
+				want := 200
+				if withProfile != (arm == "gpt-efficient") {
+					want = 400
+				}
+				if rec.Code != want {
+					t.Fatalf("profile=%v code=%d want=%d", withProfile, rec.Code, want)
+				}
+			}
+			data, _ := os.ReadFile(logPath)
+			for _, private := range []string{"PRIVATE_SYSTEM", "PRIVATE_CIPHER", "PRIVATE_VISIBLE", openaibe.GPTEfficientPrompt} {
+				if bytes.Contains(data, []byte(private)) {
+					t.Fatal("telemetry exposed request content")
+				}
+			}
+			for _, line := range bytes.Split(bytes.TrimSpace(data), []byte{'\n'}) {
+				var m measurement
+				json.Unmarshal(line, &m)
+				if m.Status == 200 && (m.FirstOutputMS == nil || m.VisibleInputBytes == 0 || len(m.InstructionsSHA256) != 64) {
+					t.Fatalf("missing telemetry: %+v", m)
+				}
+			}
+		})
 	}
 }
 

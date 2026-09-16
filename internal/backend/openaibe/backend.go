@@ -32,6 +32,7 @@ func (b *Backend) Messages(ctx context.Context, call *backend.Call, w http.Respo
 		return backend.Result{Status: 400, ErrType: "invalid_request_error"}
 	}
 	responses := call.Route.APIFlavor() == config.APIResponses
+	applyExecutionProfile(req, call.Route)
 	var body []byte
 	var turn *responsesTurn
 	inputEstimate := call.EstimateInput(req)
@@ -170,6 +171,7 @@ func (b *Backend) CountTokens(ctx context.Context, call *backend.Call, w http.Re
 		anthropic.WriteError(w, 400, "invalid_request_error", "gremlord: "+err.Error())
 		return backend.Result{Status: 400, ErrType: "invalid_request_error"}
 	}
+	applyExecutionProfile(req, call.Route)
 	estimate := call.EstimateInput(req)
 	if call.Route.APIFlavor() == config.APIResponses && b.continuity != nil {
 		if rr, err := TranslateResponsesRequest(req, call.Route); err == nil {

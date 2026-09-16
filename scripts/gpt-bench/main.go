@@ -45,6 +45,14 @@ type measurement struct {
 	Request                   int    `json:"request"`
 	Status                    int    `json:"status"`
 	DurationMS                int64  `json:"duration_ms"`
+	HeadersMS                 int64  `json:"response_headers_ms"`
+	FirstOutputMS             *int64 `json:"first_output_ms,omitempty"`
+	InstructionsBytes         int    `json:"instructions_bytes"`
+	ToolSchemaBytes           int    `json:"tool_schema_bytes"`
+	VisibleInputBytes         int    `json:"visible_input_bytes"`
+	InstructionsSHA256        string `json:"instructions_sha256"`
+	ToolSchemaSHA256          string `json:"tool_schema_sha256"`
+	ExecutionProfile          string `json:"execution_profile,omitempty"`
 	Input                     int64  `json:"input_tokens"`
 	Cached                    int64  `json:"cached_input_tokens"`
 	Output                    int64  `json:"output_tokens"`
@@ -91,7 +99,12 @@ func run() error {
 	timeout := flag.Duration("timeout", 6*time.Minute, "time limit per candidate")
 	seed := flag.Uint64("seed", 20260915, "paired launch-order seed")
 	sequencePath := flag.String("sequence", "", "optional JSON array of user turns and external verifiers (one manifest task)")
+	baseline := flag.String("baseline", "codex", "baseline arm: codex, gremlord, or gpt-efficient")
+	mut := flag.String("mut", "gremlord", "comparison arm: codex, gremlord, or gpt-efficient")
 	flag.Parse()
+	if err := validateArms(*baseline, *mut); err != nil {
+		return err
+	}
 	if *manifestPath == "" || *out == "" {
 		return errors.New("-manifest and -out are required")
 	}
@@ -137,6 +150,7 @@ func run() error {
 		return errors.New("configured provider has no key")
 	}
 	route.Model.Reasoning, route.Model.ReasoningEffort = "effort", "high"
+	route.Model.ExecutionProfile = "" // only the selected arm may enable it
 	route.Model.EffectiveContext = 600000
 	claude, err := exec.LookPath("claude")
 	if err != nil {
@@ -184,7 +198,17 @@ func run() error {
 	price, priced := p.prices.Get(route.Model.ID)
 	meta := map[string]any{"model": route.Model.ID, "effort": "high", "context_budget": 600000, "max_output_tokens_per_request": 32768, "max_requests_per_candidate": 64, "seed": *seed, "attempts": *attempts, "timeout": timeout.String(), "claude_version": version(claude), "codex_version": version(codex), "manifest_sha256": fmt.Sprintf("%x", sha256.Sum256(manifestBytes)), "price_per_million": price, "priced": priced, "price_source": "local Gremlord pricing table; estimates, not invoices", "git_head": commandOutput("git", "rev-parse", "HEAD"), "git_diff_sha256": fmt.Sprintf("%x", sha256.Sum256([]byte(commandOutput("git", "diff", "HEAD")))), "scope": "local synthetic coding pilot; native harnesses, no web/MCP/subagents; not a compaction or parity proof"}
 	meta["user_turns_per_candidate"] = max(1, len(sequence))
-	for _, name := range []string{"main.go", "sequence.go", "fixtures.py", "complex.py"} {
+	meta["baseline"], meta["mut"] = *baseline, *mut
+	meta["execution_profile_sha256"] = fmt.Sprintf("%x", sha256.Sum256([]byte(openaibe.GPTEfficientPrompt)))
+	if err := os.WriteFile(filepath.Join(absOut, "execution-profile.txt"), []byte(openaibe.GPTEfficientPrompt), 0600); err != nil {
+		return err
+	}
+	if exe, err := os.Executable(); err == nil {
+		if data, err := os.ReadFile(exe); err == nil {
+			meta["executable_sha256"] = fmt.Sprintf("%x", sha256.Sum256(data))
+		}
+	}
+	for _, name := range []string{"main.go", "arms.go", "sequence.go", "fixtures.py", "complex.py"} {
 		source, err := os.ReadFile(filepath.Join("scripts", "gpt-bench", name))
 		if err != nil {
 			return err
@@ -202,7 +226,7 @@ func run() error {
 			return err
 		}
 	}
-	runner := &eval.Runner{Options: eval.Options{Baseline: "codex", MUT: "gremlord", Judge: "none", Attempts: *attempts, Timeout: *timeout, Seed: *seed, OutputDir: absOut, BaseURL: p.url, Token: p.token, Profile: "gpt-bench", ClaudeBin: claude, DataDir: absOut}, Exec: &executor{proxy: p, claude: claude, codex: codex, sequence: sequence}}
+	runner := &eval.Runner{Options: eval.Options{Baseline: *baseline, MUT: *mut, Judge: "none", Attempts: *attempts, Timeout: *timeout, Seed: *seed, OutputDir: absOut, BaseURL: p.url, Token: p.token, Profile: "gpt-bench", ClaudeBin: claude, DataDir: absOut}, Exec: &executor{proxy: p, claude: claude, codex: codex, sequence: sequence}}
 	runner.OnCandidate = func(c eval.CandidateResult) {
 		fmt.Printf("%s %s pass=%t time=%.1fs requests=%d input=%d cached=%d output=%d estimated_usd=%.4f\n", c.Model, c.Status, c.Verifier.Passed, float64(c.AgentMS)/1000, c.Usage.Requests, c.Usage.InputTokens, c.Usage.CacheReadTokens, c.Usage.OutputTokens, c.Usage.CostUSD)
 	}
@@ -231,7 +255,7 @@ func (p *proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.mu.Lock()
 	arm := p.arms[sid]
 	p.mu.Unlock()
-	if arm != "gremlord" {
+	if !claudeArm(arm) {
 		http.Error(w, "unknown session", 400)
 		return
 	}
@@ -246,6 +270,10 @@ func (p *proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	route := p.route
+	route.Model.ExecutionProfile = ""
+	if arm == "gpt-efficient" {
+		route.Model.ExecutionProfile = "gpt-efficient-v1"
+	}
 	route.Provider.BaseURL = p.url + "/upstream/" + sid + "/v1"
 	route.Provider.APIKey, route.Provider.APIKeyEnv = p.token, ""
 	call := &backend.Call{Raw: raw, Envelope: env, Route: route, Header: r.Header}
@@ -309,6 +337,17 @@ func (p *proxy) upstream(w http.ResponseWriter, r *http.Request) {
 	m.Effort = reasoning.Effort
 	m.ReasoningContext = reasoning.Context
 	json.Unmarshal(body["parallel_tool_calls"], &m.Parallel)
+	measureInput(body, &m)
+	var instructions string
+	json.Unmarshal(body["instructions"], &instructions)
+	if arm == "gpt-efficient" {
+		m.ExecutionProfile = "gpt-efficient-v1"
+	}
+	if claudeArm(arm) && strings.Contains(instructions, openaibe.GPTEfficientPrompt) != (arm == "gpt-efficient") {
+		m.Status, m.Error = 400, "execution profile differs from benchmark arm"
+		http.Error(w, m.Error, m.Status)
+		return
+	}
 	if model != p.route.Model.ID || m.Effort != "high" {
 		m.Status = 400
 		m.Error = "model or effort differs from benchmark contract"
@@ -354,6 +393,7 @@ func (p *proxy) upstream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+	m.HeadersMS = time.Since(start).Milliseconds()
 	m.Status = resp.StatusCode
 	copyProtocolHeaders(w.Header(), resp.Header)
 	w.Header().Del("Content-Length")
@@ -387,10 +427,17 @@ func (p *proxy) upstream(w http.ResponseWriter, r *http.Request) {
 			var event struct {
 				Type     string          `json:"type"`
 				Response json.RawMessage `json:"response"`
+				Delta    json.RawMessage `json:"delta"`
 			}
-			if json.Unmarshal(line[6:], &event) == nil && (event.Type == "response.completed" || event.Type == "response.incomplete" || event.Type == "response.failed") {
-				measureResponse(event.Response, &m)
-				record()
+			if json.Unmarshal(line[6:], &event) == nil {
+				if m.FirstOutputMS == nil && strings.HasSuffix(event.Type, ".delta") && len(event.Delta) > 0 && string(event.Delta) != `""` && string(event.Delta) != "null" {
+					ms := time.Since(start).Milliseconds()
+					m.FirstOutputMS = &ms
+				}
+				if event.Type == "response.completed" || event.Type == "response.incomplete" || event.Type == "response.failed" {
+					measureResponse(event.Response, &m)
+					record()
+				}
 			}
 		}
 		if _, err := w.Write(append(append([]byte(nil), line...), '\n')); err != nil {
@@ -508,7 +555,7 @@ func (e *executor) runTurn(ctx context.Context, dir string, env, argv []string, 
 	if state != nil {
 		artifactDir = filepath.Join(artifactDir, fmt.Sprintf("turn-%02d", turn))
 	}
-	if arm == "gremlord" {
+	if claudeArm(arm) {
 		for _, k := range []string{"ANTHROPIC_BASE_URL", "ANTHROPIC_CUSTOM_HEADERS", "ANTHROPIC_MODEL", "ANTHROPIC_SMALL_FAST_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "CLAUDE_CONFIG_DIR"} {
 			clean = append(clean, k+"="+values[k])
 		}

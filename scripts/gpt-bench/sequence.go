@@ -85,6 +85,10 @@ func (e *executor) Run(ctx context.Context, dir string, env, argv []string, stdi
 		}
 		stderr.Write(errs.Bytes())
 		if err != nil {
+			result := map[string]any{"turn": state.turn, "passed": false, "agent_ms": agentMS, "execution_error": err.Error()}
+			if werr := writeJSON(filepath.Join(turnDir, "grade.json"), result); werr != nil {
+				return werr
+			}
 			return fmt.Errorf("user turn %d: %w", state.turn, err)
 		}
 		var grading bytes.Buffer
