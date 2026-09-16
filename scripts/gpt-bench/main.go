@@ -49,8 +49,12 @@ type measurement struct {
 	FirstOutputMS             *int64 `json:"first_output_ms,omitempty"`
 	InstructionsBytes         int    `json:"instructions_bytes"`
 	ToolSchemaBytes           int    `json:"tool_schema_bytes"`
+	ToolDescriptionBytes      int    `json:"tool_description_bytes"`
+	ToolParameterBytes        int    `json:"tool_parameter_bytes"`
+	ToolCount                 int    `json:"tool_count"`
 	VisibleInputBytes         int    `json:"visible_input_bytes"`
 	InstructionsSHA256        string `json:"instructions_sha256"`
+	BaseInstructionsSHA256    string `json:"base_instructions_sha256"`
 	ToolSchemaSHA256          string `json:"tool_schema_sha256"`
 	ExecutionProfile          string `json:"execution_profile,omitempty"`
 	Input                     int64  `json:"input_tokens"`

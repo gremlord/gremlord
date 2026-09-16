@@ -57,6 +57,9 @@ Artifacts record the profile and its hash, executable hash, source revision,
 per-attempt/per-turn results, API requests, tool calls, tokens, and estimated
 cost. Request telemetry adds response-header time, first nonempty output-delta
 time, full-response time, and serialized instruction/tool/visible-history sizes.
+It also separates function-tool descriptions from parameter-schema bytes and
+hashes the base instructions with the supplement removed. Compare these fields
+between the two Claude Code arms; native Responses Lite encodes tools differently.
 Hashes and counts are retained; request content and encrypted reasoning are not
 written by the meter. First-output timing includes text, reasoning summaries,
 or tool-argument deltas; it is not timing invisible reasoning tokens. Byte sizes

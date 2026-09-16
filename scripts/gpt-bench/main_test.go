@@ -166,6 +166,23 @@ func TestExecutionProfileArmsAndTelemetry(t *testing.T) {
 	}
 }
 
+func TestPromptComponentMeasurements(t *testing.T) {
+	var hashes []string
+	for _, supplement := range []string{"", "\n\n" + openaibe.GPTEfficientPrompt} {
+		body := map[string]json.RawMessage{"tools": json.RawMessage(`[{"description":"read safely","parameters":{"type":"object"}}]`), "input": json.RawMessage(`[{"type":"reasoning","encrypted_content":"excluded"}]`)}
+		body["instructions"], _ = json.Marshal("base instructions" + supplement)
+		var m measurement
+		measureInput(body, &m)
+		if m.ToolCount != 1 || m.ToolDescriptionBytes != len("read safely") || m.ToolParameterBytes != len(`{"type":"object"}`) || m.VisibleInputBytes != 0 {
+			t.Fatalf("wrong component sizes: %+v", m)
+		}
+		hashes = append(hashes, m.BaseInstructionsSHA256)
+	}
+	if hashes[0] != hashes[1] {
+		t.Fatal("base prompt comparison includes the treatment")
+	}
+}
+
 func testProxy(t *testing.T, url string) (*proxy, string) {
 	t.Helper()
 	dir := t.TempDir()
