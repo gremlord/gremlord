@@ -1,7 +1,9 @@
 # GPT performance follow-up
 
-Status: proposed implementation order, 2026-09-16. The Responses fidelity fixes
-and matched benchmarks are implemented; the production features below are not.
+Status: 2026-09-16. The Responses fidelity fixes, matched benchmarks, and opt-in
+execution profile are implemented. [Profile pilot results](gpt-profile-results.md)
+do not establish a consistent improvement in both time and cost. Defaults remain
+unchanged; context reduction, persistence, and compaction below are follow-up work.
 
 The [three-turn benchmark](gpt-benchmark-results.md) passed for both harnesses,
 but updated Gremlord took 2.29× the agent time and 2.07× the estimated cost.
@@ -18,7 +20,7 @@ Codex front-end is outside this follow-up's scope.
 
 ## 1. Reduce unnecessary model rounds
 
-Add an opt-in GPT execution profile as a separate benchmark arm. Retain actual
+The opt-in GPT execution profile is available as a separate benchmark arm. Retain actual
 Claude tool schemas and permissions. Give concise guidance to batch independent
 reads, plan cohesive edits, run relevant checks after meaningful changes, and
 finish after acceptance checks pass unless a new failure or edit warrants more
@@ -36,7 +38,7 @@ held-out multi-turn repository tasks. A profile that merely makes this one task
 cheaper is insufficient to change defaults. Keep both arms on the same model
 and effort; tune effort separately only after this comparison.
 
-First gate: the current and experimental profiles must pass every cumulative
+Default-enablement gate: the current and experimental profiles must pass every cumulative
 queue checkpoint, with repeated paired attempts showing lower time and cost.
 Record model/CLI versions, prompt hashes, request counts, tool calls, and token
 breakdowns. Freeze the winning profile before held-out evaluation. A ratio at
@@ -44,12 +46,16 @@ or below 1.10 of native Codex on time and cost is a proposed engineering target,
 not a measured result or a guarantee; preserve quality even if that target is
 not reached.
 
+The current pilot does not meet this gate: the completed queue pair has only
+small gains, and the held-out planner trades lower cost for higher latency.
+
 ## 2. Reduce repeated input without losing task state
 
-Measure prompt, tool-schema, visible-history, and replay contributions to each
-request. Add counters rather than persisting opaque reasoning or private prompt
-contents. Introduce one opt-in change at a time so a speedup has an attributable
-cause:
+The meter now records prompt, tool-schema, visible-history, and replay counts
+without persisting opaque reasoning or private prompt contents. Tool descriptions
+account for 42.3 KB of text within 58.5 KB of serialized tool definitions in the
+pilot. Test compact descriptions next, retaining their necessary instructions.
+Introduce one opt-in change at a time so a speedup has an attributable cause:
 
 - Bound oversized tool results, preserving useful head/tail sections and a way
   to retrieve the full result. Check that error details and required facts stay
