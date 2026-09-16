@@ -352,14 +352,63 @@ func TestResponsesStreamCompletedOnlyHasMessageStart(t *testing.T) {
 	}
 }
 
-func TestResponsesRequestDisablesParallelTools(t *testing.T) {
+func TestResponsesRequestEnablesParallelTools(t *testing.T) {
 	body := `{"model":"gpt-6-astra","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}`
 	out, err := TranslateResponsesRequest(parseReq(t, body), responsesRoute("effort"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.ParallelToolCalls == nil || *out.ParallelToolCalls {
-		t.Errorf("parallel_tool_calls = %v, want false", out.ParallelToolCalls)
+	if out.ParallelToolCalls == nil || !*out.ParallelToolCalls {
+		t.Errorf("parallel_tool_calls = %v, want true", out.ParallelToolCalls)
+	}
+}
+
+// Two concurrent function_call items with interleaved argument deltas — the
+// shape OpenAI emits under parallel_tool_calls:true. Each item_id must keep
+// its own buffer; concatenating onto a singleton would mix the JSON.
+func TestResponsesStreamParallelToolCalls(t *testing.T) {
+	evs := runResponsesStream(t, []string{
+		`{"type":"response.created","response":{"id":"resp_1"}}`,
+		`{"type":"response.output_item.added","item_id":"fc_1","output_index":0,"item":{"type":"function_call","id":"fc_1","call_id":"call_a","name":"read_file"}}`,
+		`{"type":"response.output_item.added","item_id":"fc_2","output_index":1,"item":{"type":"function_call","id":"fc_2","call_id":"call_b","name":"write_file"}}`,
+		`{"type":"response.function_call_arguments.delta","item_id":"fc_1","output_index":0,"delta":"{\"path\":"}`,
+		`{"type":"response.function_call_arguments.delta","item_id":"fc_2","output_index":1,"delta":"{\"path\":"}`,
+		`{"type":"response.function_call_arguments.delta","item_id":"fc_1","output_index":0,"delta":"\"a.go\"}"}`,
+		`{"type":"response.function_call_arguments.delta","item_id":"fc_2","output_index":1,"delta":"\"b.go\"}"}`,
+		`{"type":"response.output_item.done","item_id":"fc_1","output_index":0,"item":{"type":"function_call","id":"fc_1","call_id":"call_a","name":"read_file"}}`,
+		`{"type":"response.output_item.done","item_id":"fc_2","output_index":1,"item":{"type":"function_call","id":"fc_2","call_id":"call_b","name":"write_file"}}`,
+		`{"type":"response.completed","response":{"id":"resp_1","status":"completed","output":[{"type":"function_call"},{"type":"function_call"}],"usage":{"input_tokens":8,"output_tokens":4}}}`,
+	})
+	type tool struct {
+		id, name, args string
+	}
+	var tools []tool
+	for _, e := range evs {
+		switch e.name {
+		case "content_block_start":
+			cb := e.data["content_block"].(map[string]any)
+			if cb["type"] == "tool_use" {
+				tools = append(tools, tool{id: cb["id"].(string), name: cb["name"].(string)})
+			}
+		case "content_block_delta":
+			d := e.data["delta"].(map[string]any)
+			if d["type"] == "input_json_delta" && len(tools) > 0 {
+				tools[len(tools)-1].args += d["partial_json"].(string)
+			}
+		}
+	}
+	if len(tools) != 2 {
+		t.Fatalf("tool blocks = %d, want 2: %s", len(tools), names(evs))
+	}
+	if tools[0].id != "call_a" || tools[0].name != "read_file" || tools[0].args != `{"path":"a.go"}` {
+		t.Errorf("tool 0 = %+v", tools[0])
+	}
+	if tools[1].id != "call_b" || tools[1].name != "write_file" || tools[1].args != `{"path":"b.go"}` {
+		t.Errorf("tool 1 = %+v", tools[1])
+	}
+	last := evs[len(evs)-2]
+	if last.data["delta"].(map[string]any)["stop_reason"] != "tool_use" {
+		t.Errorf("stop_reason = %v", last.data["delta"])
 	}
 }
 

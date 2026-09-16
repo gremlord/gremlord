@@ -51,6 +51,28 @@ func TestParseAndResolve(t *testing.T) {
 	}
 }
 
+func TestReasoningEffortValidation(t *testing.T) {
+	for _, tc := range []struct {
+		settings string
+		valid    bool
+	}{
+		{"reasoning: effort, reasoning_effort: xhigh", true},
+		{"reasoning: effort, reasoning_effort: ultra", true},
+		{"reasoning: effort, reasoning_effort: typo", false},
+		{"reasoning: passive, reasoning_effort: high", false},
+	} {
+		yaml := strings.Replace(testYAML, "id: qwen3-coder-30b,", "id: qwen3-coder-30b, "+tc.settings+",", 1)
+		_, err := Parse([]byte(yaml))
+		if (err == nil) != tc.valid {
+			t.Errorf("%s: %v", tc.settings, err)
+		}
+	}
+	yaml := strings.Replace(testYAML, "id: claude-sonnet-5", "id: claude-sonnet-5, reasoning: effort, reasoning_effort: high", 1)
+	if _, err := Parse([]byte(yaml)); err == nil {
+		t.Error("accepted OpenAI effort setting on Anthropic provider")
+	}
+}
+
 func TestValidationErrors(t *testing.T) {
 	cases := map[string]string{
 		"unknown provider type": `

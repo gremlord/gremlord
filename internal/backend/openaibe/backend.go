@@ -17,11 +17,12 @@ import (
 )
 
 type Backend struct {
-	client *http.Client
+	client     *http.Client
+	continuity *responsesContinuity
 }
 
 func New() *Backend {
-	return &Backend{client: &http.Client{Transport: backend.NewTransport()}}
+	return &Backend{client: &http.Client{Transport: backend.NewTransport()}, continuity: newResponsesContinuity()}
 }
 
 func (b *Backend) Messages(ctx context.Context, call *backend.Call, w http.ResponseWriter) backend.Result {
@@ -32,12 +33,21 @@ func (b *Backend) Messages(ctx context.Context, call *backend.Call, w http.Respo
 	}
 	responses := call.Route.APIFlavor() == config.APIResponses
 	var body []byte
+	var turn *responsesTurn
+	inputEstimate := call.EstimateInput(req)
 	if responses {
 		rr, err := TranslateResponsesRequest(req, call.Route)
 		if err != nil {
 			anthropic.WriteError(w, 400, "invalid_request_error", "gremlord translate: "+err.Error())
 			return backend.Result{Status: 400, ErrType: "invalid_request_error"}
 		}
+		if b.continuity != nil {
+			turn = b.continuity.prepare(call, rr, inputEstimate)
+			if turn != nil {
+				inputEstimate = turn.inputEstimate
+			}
+		}
+		rr.Input = normalizeResponsesToolHistory(rr.Input)
 		body, err = json.Marshal(rr)
 		if err != nil {
 			anthropic.WriteError(w, 500, "api_error", "gremlord: "+err.Error())
@@ -91,8 +101,9 @@ func (b *Backend) Messages(ctx context.Context, call *backend.Call, w http.Respo
 	if req.Stream {
 		sse := anthropic.NewSSEWriter(w)
 		state := newStreamState(sse, call.Envelope.Model)
+		state.respTurn = turn
 		state.scale = scale
-		state.estInput = tokens.ScaleCount(call.EstimateInput(req), scale)
+		state.estInput = tokens.ScaleCount(inputEstimate, scale)
 		var usage anthropic.Usage
 		var errType string
 		if responses {
@@ -126,6 +137,9 @@ func (b *Backend) Messages(ctx context.Context, call *backend.Call, w http.Respo
 			return backend.Result{Status: 502, ErrType: "api_error", ErrMsg: msg}
 		}
 		out, err = TranslateResponsesResponse(&parsed, call.Envelope.Model)
+		if err == nil {
+			turn.remember(&parsed)
+		}
 	} else {
 		var parsed openai.ChatResponse
 		if err := json.Unmarshal(raw, &parsed); err != nil {
@@ -156,7 +170,15 @@ func (b *Backend) CountTokens(ctx context.Context, call *backend.Call, w http.Re
 		anthropic.WriteError(w, 400, "invalid_request_error", "gremlord: "+err.Error())
 		return backend.Result{Status: 400, ErrType: "invalid_request_error"}
 	}
-	n := tokens.ScaleCount(call.EstimateInput(req), tokens.ScaleFactor(call.ScaleBudget()))
+	estimate := call.EstimateInput(req)
+	if call.Route.APIFlavor() == config.APIResponses && b.continuity != nil {
+		if rr, err := TranslateResponsesRequest(req, call.Route); err == nil {
+			if turn := b.continuity.prepare(call, rr, estimate); turn != nil {
+				estimate = turn.inputEstimate
+			}
+		}
+	}
+	n := tokens.ScaleCount(estimate, tokens.ScaleFactor(call.ScaleBudget()))
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(anthropic.CountTokensResponse{InputTokens: n})
 	return backend.Result{Status: 200}

@@ -86,7 +86,7 @@ func TranslateRequest(req *anthropic.MessagesRequest, route config.Resolved) (*o
 	reasoning := route.Model.Reasoning
 	switch reasoning {
 	case "effort":
-		out.ReasoningEffort = effortFromBudget(req.Thinking)
+		out.ReasoningEffort = requestReasoningEffort(req, route.Model)
 		// Reasoning models reject sampling params.
 	case "none":
 		// GPT-5-class models default to some reasoning mode unless told
@@ -239,4 +239,22 @@ func effortFromBudget(t *anthropic.Thinking) string {
 	default:
 		return "high"
 	}
+}
+
+// Explicit model settings win over client effort and legacy thinking budgets.
+func requestReasoningEffort(req *anthropic.MessagesRequest, model config.Model) string {
+	if model.ReasoningEffort != "" {
+		return model.ReasoningEffort
+	}
+	if req.OutputConfig != nil {
+		switch req.OutputConfig.Effort {
+		case "low", "medium", "high", "xhigh":
+			return req.OutputConfig.Effort
+		case "max":
+			// Anthropic max maps to the common GPT top tier. Newer
+			// model-specific max/ultra require an explicit model setting.
+			return "xhigh"
+		}
+	}
+	return effortFromBudget(req.Thinking)
 }

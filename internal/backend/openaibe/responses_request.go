@@ -10,18 +10,24 @@ import (
 
 // TranslateResponsesRequest maps an Anthropic request onto OpenAI's
 // /v1/responses body. Same fidelity gaps as TranslateRequest, plus stop
-// sequences (Responses has no equivalent). Thinking blocks are still
-// dropped on resend — we send store:false and do not request encrypted
-// reasoning, so there is nothing to round-trip. The 128-tool-call split
+// sequences (Responses has no equivalent). Display-only thinking blocks
+// are dropped here; Backend restores original output items from its
+// session-scoped continuity cache before sending. The 128-tool-call split
 // is unnecessary here: function_call items are not capped that way.
 func TranslateResponsesRequest(req *anthropic.MessagesRequest, route config.Resolved) (*openai.ResponsesRequest, error) {
 	store := false
-	parallel := false
+	// Anthropic's own default is parallel tool use. Standard Responses
+	// function tools support it too; Codex's separate Responses Lite path
+	// uses a different tool protocol. Unless explicitly disabled below, the
+	// streamer tracks concurrent function_call items by id, so this no
+	// longer has to be pinned false for correctness.
+	parallel := true
 	out := &openai.ResponsesRequest{
 		Model:             route.Model.ID,
 		Stream:            req.Stream,
 		Store:             &store,
 		ParallelToolCalls: &parallel,
+		Include:           []string{"reasoning.encrypted_content"},
 	}
 
 	if sys := req.System.Text(); sys != "" {
@@ -76,8 +82,11 @@ func TranslateResponsesRequest(req *anthropic.MessagesRequest, route config.Reso
 
 	switch route.Model.Reasoning {
 	case "effort":
-		if effort := effortFromBudget(req.Thinking); effort != "" {
+		if effort := requestReasoningEffort(req, route.Model); effort != "" {
 			out.Reasoning = &openai.ResponsesReasoning{Effort: effort, Summary: "auto"}
+			if effort == "none" {
+				out.Reasoning.Summary = ""
+			}
 		}
 	case "none":
 		out.Reasoning = &openai.ResponsesReasoning{Effort: "none"}
@@ -137,7 +146,7 @@ func translateResponsesMessage(msg anthropic.Message) ([]openai.ResponsesInputIt
 					Arguments: string(b.Input),
 				})
 			case "thinking", "redacted_thinking":
-				// Dropped on resend — store:false, no encrypted_content.
+				// Backend replays the original reasoning, never this summary.
 			}
 		}
 		if text != "" {

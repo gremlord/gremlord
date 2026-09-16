@@ -191,6 +191,9 @@ type Model struct {
 	// responses flavor, effort+tools is valid — that combination is
 	// why the flavor exists.
 	Reasoning string `yaml:"reasoning"`
+	// ReasoningEffort pins a provider-supported effort instead of inferring
+	// it from Claude Code's thinking budget. Requires reasoning: effort.
+	ReasoningEffort string `yaml:"reasoning_effort"`
 	// API overrides the provider's OpenAI-dialect wire format for this
 	// model: chat_completions or responses. Empty inherits the provider
 	// (itself defaulting to chat_completions). openai-backed models only.
@@ -394,7 +397,7 @@ func (c *Config) Validate() error {
 			// A delegated CLI run is a whole agent loop, not a completion —
 			// none of the HTTP/completion knobs apply. ID stays optional and,
 			// when set, is passed as the CLI's model-selection flag.
-			if m.Reasoning != "" || m.MaxOutput != 0 || m.Pricing != nil || m.ContextWindow != 0 || m.EffectiveContext != 0 || m.API != "" {
+			if m.Reasoning != "" || m.ReasoningEffort != "" || m.MaxOutput != 0 || m.Pricing != nil || m.ContextWindow != 0 || m.EffectiveContext != 0 || m.API != "" {
 				return fmt.Errorf("config: model %q: reasoning/max_output/pricing/context_window/effective_context/api have no effect on cli providers — remove them", alias)
 			}
 			continue
@@ -406,6 +409,16 @@ func (c *Config) Validate() error {
 		case "", "none", "effort", "passive":
 		default:
 			return fmt.Errorf("config: model %q has unknown reasoning %q", alias, m.Reasoning)
+		}
+		if m.ReasoningEffort != "" {
+			if c.Providers[m.Provider].Type != ProviderOpenAI || m.Reasoning != "effort" {
+				return fmt.Errorf("config: model %q: reasoning_effort requires an openai provider and reasoning: effort", alias)
+			}
+			switch m.ReasoningEffort {
+			case "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra":
+			default:
+				return fmt.Errorf("config: model %q has unknown reasoning_effort %q", alias, m.ReasoningEffort)
+			}
 		}
 		if m.API != "" {
 			if c.Providers[m.Provider].Type != ProviderOpenAI {
