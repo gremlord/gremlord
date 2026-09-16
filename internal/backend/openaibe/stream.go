@@ -23,17 +23,32 @@ type streamState struct {
 	sse   *anthropic.SSEWriter
 	alias string
 
-	started         bool
-	sawChunk        bool   // a real upstream chunk arrived (vs synthetic keep-alive start)
-	index           int    // next content block index
-	openType        string // "", "thinking", "text", "tool"
-	openaiToolIx    int    // openai tool_call index of the open tool block
-	openToolID      string // openai tool_call id of the open tool block
-	pendingArgs     string // tool args buffered before the block could open
-	pendingID       string
-	pendingName     string
-	havePending     bool
-	holdPendingTool bool // Responses: buffer function_call until output_item.done
+	started      bool
+	sawChunk     bool   // a real upstream chunk arrived (vs synthetic keep-alive start)
+	index        int    // next content block index
+	openType     string // "", "thinking", "text", "tool"
+	openaiToolIx int    // openai tool_call index of the open tool block
+	openToolID   string // openai tool_call id of the open tool block
+	pendingArgs  string // tool args buffered before the block could open
+	pendingID    string
+	pendingName  string
+	havePending  bool
+
+	// respPending buffers Responses API function_call items by item id (or
+	// "idx:N" from output_index when a provider omits the id) until each
+	// one's output_item.done, so concurrent tool calls under
+	// parallel_tool_calls:true don't corrupt each other's argument deltas.
+	// respOrder is insertion order, used to flush leftovers in call order if
+	// the stream ends before every item's done arrives.
+	respPending     map[string]*respPendingTool
+	respOrder       []string
+	respTurn        *responsesTurn
+	respOutput      map[int]openai.ResponsesOutputItem
+	respVisible     anthropic.MessageBody
+	respAliases     map[int]string
+	respEmitted     map[string]bool
+	respTextSeen    map[string]bool
+	requireTerminal bool
 
 	finishReason     string
 	directStopReason string
@@ -132,6 +147,10 @@ func (s *streamState) runSSE(ctx context.Context, body io.Reader, handle func([]
 		case err := <-scanErr:
 			if err != nil {
 				s.sse.ErrorEvent("api_error", "upstream stream: "+err.Error())
+				return s.usage, "api_error"
+			}
+			if s.requireTerminal {
+				s.sse.ErrorEvent("api_error", "upstream Responses stream ended before a terminal event")
 				return s.usage, "api_error"
 			}
 			return s.usage, s.finalize()
@@ -320,7 +339,7 @@ func (s *streamState) ensureBlock(kind string) {
 }
 
 func (s *streamState) closeBlock() {
-	if s.havePending && !s.holdPendingTool {
+	if s.havePending {
 		// Tool block that never got a name — open it with a placeholder so
 		// buffered args aren't lost.
 		if s.pendingName == "" {
@@ -355,6 +374,7 @@ func (s *streamState) finalize() string {
 		s.sse.ErrorEvent("api_error", "upstream produced no chunks")
 		return "api_error"
 	}
+	s.flushRespTools()
 	s.closeBlock()
 	reported := tokens.ScaleUsage(s.usage, s.scale)
 	stopReason := s.directStopReason

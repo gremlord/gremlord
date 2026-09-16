@@ -20,6 +20,7 @@ type MessagesRequest struct {
 	StopSequences []string        `json:"stop_sequences,omitempty"`
 	Stream        bool            `json:"stream,omitempty"`
 	Thinking      *Thinking       `json:"thinking,omitempty"`
+	OutputConfig  *OutputConfig   `json:"output_config,omitempty"`
 	Metadata      json.RawMessage `json:"metadata,omitempty"`
 }
 
@@ -211,6 +212,10 @@ type ToolChoice struct {
 type Thinking struct {
 	Type         string `json:"type"`
 	BudgetTokens int    `json:"budget_tokens,omitempty"`
+}
+
+type OutputConfig struct {
+	Effort string `json:"effort,omitempty"`
 }
 
 // Response types (built by the translation backend).

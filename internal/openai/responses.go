@@ -18,9 +18,9 @@ type ResponsesRequest struct {
 	ToolChoice        any                  `json:"tool_choice,omitempty"`
 	ParallelToolCalls *bool                `json:"parallel_tool_calls,omitempty"`
 	Reasoning         *ResponsesReasoning  `json:"reasoning,omitempty"`
+	Include           []string             `json:"include,omitempty"`
 	// Store is a pointer so we can send false (omitempty would drop it).
-	// Always false: we don't use previous_response_id or encrypted
-	// reasoning round-trip, so there's nothing to persist server-side.
+	// Always false: conversation state is replayed by the translator.
 	Store *bool `json:"store,omitempty"`
 }
 
@@ -34,6 +34,7 @@ type ResponsesTool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description,omitempty"`
 	Parameters  json.RawMessage `json:"parameters,omitempty"`
+	Strict      bool            `json:"strict"` // preserve the caller's optional tool parameters
 }
 
 // ResponsesInputItem is a tagged union. Type selects the variant:
@@ -41,13 +42,24 @@ type ResponsesTool struct {
 //   - "function_call": prior assistant tool call
 //   - "function_call_output": tool result
 type ResponsesInputItem struct {
-	Type      string `json:"type,omitempty"`
-	Role      string `json:"role,omitempty"`
-	Content   any    `json:"content,omitempty"` // string or []ResponsesContentPart
-	CallID    string `json:"call_id,omitempty"`
-	Name      string `json:"name,omitempty"`
-	Arguments string `json:"arguments,omitempty"`
-	Output    string `json:"output,omitempty"`
+	// Replay contains an original upstream output item, including opaque
+	// reasoning and assistant phase. It is never sent to the Anthropic client.
+	Replay    json.RawMessage `json:"-"`
+	Type      string          `json:"type,omitempty"`
+	Role      string          `json:"role,omitempty"`
+	Content   any             `json:"content,omitempty"` // string or []ResponsesContentPart
+	CallID    string          `json:"call_id,omitempty"`
+	Name      string          `json:"name,omitempty"`
+	Arguments string          `json:"arguments,omitempty"`
+	Output    string          `json:"output,omitempty"`
+}
+
+func (i ResponsesInputItem) MarshalJSON() ([]byte, error) {
+	if len(i.Replay) != 0 {
+		return i.Replay, nil
+	}
+	type plain ResponsesInputItem
+	return json.Marshal(plain(i))
 }
 
 type ResponsesContentPart struct {
@@ -74,15 +86,27 @@ type ResponsesError struct {
 }
 
 type ResponsesOutputItem struct {
-	Type      string                   `json:"type"` // message | function_call | reasoning
-	ID        string                   `json:"id"`
-	Status    string                   `json:"status,omitempty"`
-	CallID    string                   `json:"call_id,omitempty"`
-	Name      string                   `json:"name,omitempty"`
-	Arguments string                   `json:"arguments,omitempty"`
-	Role      string                   `json:"role,omitempty"`
-	Content   []ResponsesOutputContent `json:"content,omitempty"`
-	Summary   []ResponsesSummaryText   `json:"summary,omitempty"`
+	Raw              json.RawMessage          `json:"-"`
+	Type             string                   `json:"type"` // message | function_call | reasoning
+	ID               string                   `json:"id"`
+	Status           string                   `json:"status,omitempty"`
+	CallID           string                   `json:"call_id,omitempty"`
+	Name             string                   `json:"name,omitempty"`
+	Arguments        string                   `json:"arguments,omitempty"`
+	Role             string                   `json:"role,omitempty"`
+	Content          []ResponsesOutputContent `json:"content,omitempty"`
+	Summary          []ResponsesSummaryText   `json:"summary,omitempty"`
+	EncryptedContent string                   `json:"encrypted_content,omitempty"`
+	Phase            string                   `json:"phase,omitempty"`
+}
+
+func (i *ResponsesOutputItem) UnmarshalJSON(data []byte) error {
+	type plain ResponsesOutputItem
+	if err := json.Unmarshal(data, (*plain)(i)); err != nil {
+		return err
+	}
+	i.Raw = append(json.RawMessage(nil), data...)
+	return nil
 }
 
 type ResponsesOutputContent struct {
