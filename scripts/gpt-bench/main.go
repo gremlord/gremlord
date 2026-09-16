@@ -212,7 +212,7 @@ func run() error {
 			meta["executable_sha256"] = fmt.Sprintf("%x", sha256.Sum256(data))
 		}
 	}
-	for _, name := range []string{"main.go", "arms.go", "sequence.go", "fixtures.py", "complex.py"} {
+	for _, name := range []string{"main.go", "arms.go", "sequence.go", "fixtures.py", "complex.py", "planner.py"} {
 		source, err := os.ReadFile(filepath.Join("scripts", "gpt-bench", name))
 		if err != nil {
 			return err

@@ -25,8 +25,8 @@ func validateArms(baseline, mut string) error {
 	return nil
 }
 
-// Serialized sizes and stable hashes support context-growth diagnosis without
-// storing prompt contents or opaque reasoning. These are bytes, not tokens.
+// UTF-8 text sizes, serialized JSON sizes, and stable hashes support context
+// diagnosis without storing prompt contents or opaque reasoning. Not tokens.
 func measureInput(body map[string]json.RawMessage, m *measurement) {
 	var instructions string
 	json.Unmarshal(body["instructions"], &instructions)
