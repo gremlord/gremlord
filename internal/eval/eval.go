@@ -668,6 +668,9 @@ func (r *Runner) runCandidate(ctx context.Context, manifest *Manifest, task Task
 	switch {
 	case errors.Is(runCtx.Err(), context.DeadlineExceeded):
 		res.Status, res.Error = StatusTimeout, "candidate exceeded "+r.Options.Timeout.String()
+	case errors.Is(err, context.DeadlineExceeded):
+		// Injected harnesses may enforce a shorter per-turn deadline.
+		res.Status, res.Error = StatusTimeout, err.Error()
 	case err != nil:
 		res.Status, res.Error = StatusModelError, err.Error()
 	default:

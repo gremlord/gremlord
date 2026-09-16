@@ -413,6 +413,23 @@ func TestCandidateFailureSkipsVerifier(t *testing.T) {
 	}
 }
 
+func TestCandidateExecutorDeadlineIsTimeout(t *testing.T) {
+	ex := &scriptExecutor{claudeErr: fmt.Errorf("turn limit: %w", context.DeadlineExceeded)}
+	runner := &Runner{Exec: ex, Options: Options{
+		Baseline: "a", MUT: "b", Judge: "none", OutputDir: t.TempDir(),
+		Timeout: time.Minute, ClaudeBin: "claude",
+	}}
+	s, err := runner.Run(context.Background(), testManifest(gitRepo(t), ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []CandidateResult{s.Pairs[0].Baseline, s.Pairs[0].MUT} {
+		if c.Status != StatusTimeout || c.Verifier.Ran || !strings.Contains(c.Error, "turn limit") {
+			t.Fatalf("nested deadline classified incorrectly: %+v", c)
+		}
+	}
+}
+
 // A verifier that exits with VerifierInfraExit is saying it could not judge
 // the candidate — a missing image or toolchain. Scoring that as a model loss
 // blames the model for our machine.

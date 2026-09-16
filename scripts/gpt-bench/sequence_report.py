@@ -33,7 +33,8 @@ def report(root):
                         checkpoints_recorded=len(grades), agent_seconds=agent,
                         requests=len(rr), estimated_usd=c["usage"]["cost_usd"],
                         status=c["status"], final_passed=c["verifier"]["passed"],
-                        api_errors=sum(bool(r.get("error")) or r["status"] != 200 for r in rr))
+                        api_errors=sum(bool(r.get("error")) or r["status"] != 200 for r in rr),
+                        unknown_usage_requests=sum(r["status"] == 200 and not r.get("response_status") for r in rr))
             for field in ["input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens", "tool_calls"]:
                 item[field] = sum(r.get(field, 0) for r in rr)
             item["upstream_seconds"] = sum(r["duration_ms"] for r in rr) / 1000
@@ -42,7 +43,7 @@ def report(root):
             candidates.append(item)
             m = metrics.setdefault(arm, dict(attempts=0, workflows_passed=0, checkpoints_passed=0,
                     checkpoints_expected=0, agent_seconds=0, estimated_usd=0, requests=0,
-                    api_errors=0, input_tokens=0, cached_input_tokens=0, output_tokens=0,
+                    api_errors=0, unknown_usage_requests=0, input_tokens=0, cached_input_tokens=0, output_tokens=0,
                     reasoning_tokens=0, tool_calls=0, upstream_seconds=0))
             m["attempts"] += 1
             m["workflows_passed"] += c["status"] == "complete" and c["verifier"]["passed"] and passed == turns
@@ -60,11 +61,13 @@ def report(root):
              "| Arm | Workflows passed | Checkpoints | Agent seconds | API requests | Tool calls | Estimated USD |",
              "| --- | --- | --- | --- | --- | --- | --- |"]
     for arm, m in metrics.items():
-        lines.append(f"| {arm} | {m['workflows_passed']}/{m['attempts']} | {m['checkpoints_passed']}/{m['checkpoints_expected']} | {m['agent_seconds']:.1f} | {m['requests']} | {m['tool_calls']} | {m['estimated_usd']:.4f} |")
+        lower_bound = "≥ " if m['unknown_usage_requests'] else ""
+        lines.append(f"| {arm} | {m['workflows_passed']}/{m['attempts']} | {m['checkpoints_passed']}/{m['checkpoints_expected']} | {m['agent_seconds']:.1f} | {m['requests']} | {m['tool_calls']} | {lower_bound}{m['estimated_usd']:.4f} |")
     lines += ["", "| Arm | Task | Attempt | User turn | Cumulative checks | Seconds | Requests | Encrypted reasoning items on first request |",
               "| --- | --- | --- | --- | --- | --- | --- | --- |"] + detail
     lines += ["", "All repetitions are included above. A later successful turn cannot erase a failed earlier checkpoint. Follow-up prompts contain changed requirements; grader feedback is not sent to the models. Identical model/effort, isolated homes/workspaces, and frozen external graders are used for both arms.",
               "", "Input includes cached tokens once; output includes reasoning. Costs use the recorded local rates and are estimates, not invoices. First-output time means the first nonempty upstream delta (text, summary, or tool arguments), not an invisible reasoning token. API durations include networking and streaming. Byte counts are serialized sizes, not token estimates.",
+              "", "A ≥ cost has incomplete metering: an interrupted successful HTTP stream returned no terminal usage. The recorded spend omits that request's unknown billed tokens. Timed-out workflows also completed less work, so their raw time/cost cannot be compared as successful-completion latency/cost. Cancellations are retained in request-error counts.",
               "", "Repeated attempts of a workflow are not independent tasks. No general parity or compaction claim follows from this run. Inspect requests.jsonl, per-turn grades/patches, and environment.json for evidence.", ""]
     (root / "report.md").write_text("\n".join(lines))
     (root / "metrics.json").write_text(json.dumps(dict(arms=metrics, candidates=candidates), indent=2) + "\n")

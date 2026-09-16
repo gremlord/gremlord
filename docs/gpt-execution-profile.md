@@ -66,6 +66,9 @@ or tool-argument deltas; it is not timing invisible reasoning tokens. Byte sizes
 are not token estimates.
 
 The reporting script sums all repetitions and retains failed/missing stages.
+An interrupted HTTP stream without terminal usage leaves some spend unknown;
+the report marks that cost as a lower bound. A timed-out workflow completed
+less work, so its raw time/cost is not successful-completion time/cost.
 These synthetic workflows remain below the compaction threshold. Their results
 cannot establish general parity with Codex or validate restart/compaction.
 

@@ -75,6 +75,9 @@ func (e *executor) Run(ctx context.Context, dir string, env, argv []string, stdi
 		start := time.Now()
 		turnCtx, cancel := context.WithTimeout(ctx, 8*time.Minute)
 		err := e.runTurn(turnCtx, dir, env, args, nil, &out, &errs, state)
+		if errors.Is(turnCtx.Err(), context.DeadlineExceeded) {
+			err = fmt.Errorf("user turn exceeded 8m: %w", context.DeadlineExceeded)
+		}
 		cancel()
 		agentMS := time.Since(start).Milliseconds()
 		if werr := os.WriteFile(filepath.Join(turnDir, "stdout.json"), out.Bytes(), 0600); werr != nil {
