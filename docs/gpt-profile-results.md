@@ -1,4 +1,7 @@
-# GPT execution profile pilot
+# GPT-5.6 Sol execution profile pilot
+
+For the follow-up Grok 4.6 and GPT-6 Astra runs, including a fresh native
+Codex baseline on Astra, see [the expanded results](grok-astra-profile-results.md).
 
 Measured on 2026-09-16. GPT stays inside Claude Code in **both** arms. The
 baseline is the updated backend after PR #31; treatment adds only the frozen
@@ -147,8 +150,10 @@ The meter stores counts and hashes, not private prompts or encrypted reasoning.
 
 All costs use the same recorded local rates as the earlier comparison:
 $5/M uncached input, $0.50/M cached input, and $30/M output. They are normalized
-estimates, not invoices or a claim about current advertised prices. Cancelled
-requests without final usage make the recorded spend a lower bound. Agent time
+estimates, not invoices or a claim about current advertised prices. This older
+meter did not record cache writes separately, so their partition cannot be
+recovered from these artifacts. Cancelled requests without final usage make the
+recorded spend a lower bound. Agent time
 excludes the short external grading steps. The two-turn preflight is excluded
 from scored performance results.
 

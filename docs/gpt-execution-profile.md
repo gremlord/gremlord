@@ -11,10 +11,12 @@ validation are complete. Failing checks, subsequent edits, and unresolved risks
 still require follow-through. It adds 1,388 UTF-8 bytes including the separator;
 that is extra prompt content, so a net benefit must be measured.
 
-See [the pilot results](gpt-profile-results.md) before enabling this experiment.
-The completed queue pair showed only a small time/cost reduction despite fewer
-requests. The separate planner pair was 13.1% cheaper but 21.1% slower. A
-consistent improvement in both time and cost has not been established.
+See the [Sol pilot](gpt-profile-results.md) and the expanded
+[Grok/Astra results with a clean native Astra baseline](grok-astra-profile-results.md)
+before enabling this experiment. Results vary by model and workflow: Grok
+became faster with mixed cost changes; completed Astra profile pairs became
+slower. A consistent improvement in both time and cost has not been established.
+The profile remains experimental and off by default.
 
 ## Configuration
 

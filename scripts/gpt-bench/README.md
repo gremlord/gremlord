@@ -33,8 +33,9 @@ the same tests and tasks; they are repetitions, not six independent problems.
 The driver reuses Gremlord's local eval workspace, pairing, grading, and usage
 pipeline. It invokes the native CLI through an injected executor; it does not
 add inbound Responses support or a Codex mode to the production router. Both
-harnesses have fresh homes, no user customizations/MCP/web/subagents, a 600,000
-token declared context budget, and a 32,768-token per-response output cap.
+harnesses have fresh homes, no user customizations/MCP/web/subagents, a declared
+context budget of 600,000 tokens capped at the configured model window, and a
+32,768-token per-response output cap.
 Claude keeps its standard prompt in safe mode; native Codex keeps its own
 prompt/tools and OpenAI provider identity. Native request and response protocol
 headers (including Responses Lite and turn state) pass through the meter.
@@ -132,3 +133,59 @@ Requested/returned service tiers are recorded to detect billing-mode differences
 The meter uses the recorded flat rates; check context-size tiers before treating
 any long-context result as an invoice estimate. Historical runs without the
 write counter priced non-cached input as one bucket and cannot recover its split.
+
+## Grok/Astra matrix and CLI pinning
+
+See the [Grok/Astra results](../../docs/grok-astra-profile-results.md) for the
+same three-turn queue/planner suite on both models and a fresh native Astra
+baseline. The profile remains off by default.
+
+Before a multi-hour matrix, copy the actual standalone Claude and Codex
+executables and Codex's required companion `codex-code-mode-host` from the same
+release into a private directory and prepend that directory to `PATH`.
+Record their version output and SHA-256 hashes. Copy executable files rather
+than global auto-updating symlinks, and verify the hashes again afterward.
+Fresh candidate homes isolate configuration; they do not freeze the CLI binary
+or clear the provider's prompt cache. Run a resumed file-editing preflight with
+external assertions after copying: `--version` alone does not check whether
+native tools can execute. Reject startup errors such as code mode unavailable.
+
+On macOS, prevent idle sleep for a scored run, for example by prefixing the
+benchmark command with `caffeinate -i`. Preserve user power settings. Check wall
+clock against elapsed duration: monotonic timers can pause during suspension,
+while API streams and cache lifetimes continue to advance. Retain and exclude
+sleep-affected comparisons, then rerun the whole pair under stable conditions.
+
+With those pinned executables on `PATH` and fresh fixture/output directories:
+
+```sh
+# Grok profile comparison; benchmark-only API override.
+/tmp/gremlord-gpt-bench-multiturn \
+  -model grok -api responses -baseline gremlord -mut gpt-efficient \
+  -manifest .gremlord/evals/queue-fixtures-RUN/manifest.yaml \
+  -sequence .gremlord/evals/queue-fixtures-RUN/sequence.json \
+  -out .gremlord/evals/grok-profile-queue-RUN -attempts 2 -timeout 25m
+
+# Astra profile comparison with separate cache-write pricing.
+/tmp/gremlord-gpt-bench-multiturn \
+  -model gpt-6-astra -cache-write-price 12.5 \
+  -baseline gremlord -mut gpt-efficient \
+  -manifest .gremlord/evals/queue-fixtures-RUN/manifest.yaml \
+  -sequence .gremlord/evals/queue-fixtures-RUN/sequence.json \
+  -out .gremlord/evals/astra-profile-queue-RUN -attempts 2 -timeout 25m
+
+# Fresh native Astra comparison, including its own Gremlord controls.
+/tmp/gremlord-gpt-bench-multiturn \
+  -model gpt-6-astra -cache-write-price 12.5 \
+  -baseline codex -mut gremlord \
+  -manifest .gremlord/evals/queue-fixtures-RUN/manifest.yaml \
+  -sequence .gremlord/evals/queue-fixtures-RUN/sequence.json \
+  -out .gremlord/evals/astra-native-queue-RUN -attempts 2 -timeout 25m
+```
+
+Repeat each comparison using the planner manifest/sequence, a fresh output
+directory, and `-attempts 1`. Run scored jobs sequentially. Generate
+`sequence_report.py` reports for all six directories. Preserve timeouts and
+interrupted artifacts; compare completed-work speed/cost only when both arms
+pass every cumulative checkpoint and final grade. The fixed seed determines
+arm order; do not choose a favorable repetition after seeing results.

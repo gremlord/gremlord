@@ -1,11 +1,12 @@
 # GPT performance follow-up
 
 Status: 2026-09-16. The Responses fidelity fixes, matched benchmarks, and opt-in
-execution profile are implemented. [Profile pilot results](gpt-profile-results.md)
+execution profile are implemented. The [Sol pilot](gpt-profile-results.md) and
+[Grok/Astra matrix with fresh native Astra controls](grok-astra-profile-results.md)
 do not establish a consistent improvement in both time and cost. Defaults remain
 unchanged; context reduction, persistence, and compaction below are follow-up work.
 
-The [three-turn benchmark](gpt-benchmark-results.md) passed for both harnesses,
+The historical [GPT-5.6 Sol three-turn benchmark](gpt-benchmark-results.md) passed for both harnesses,
 but updated Gremlord took 2.29× the agent time and 2.07× the estimated cost.
 This is one workflow, not a general ranking or a before/after regression test.
 The next target is equal task success with fewer model rounds and less context
@@ -46,15 +47,19 @@ or below 1.10 of native Codex on time and cost is a proposed engineering target,
 not a measured result or a guarantee; preserve quality even if that target is
 not reached.
 
-The current pilot does not meet this gate: the completed queue pair has only
-small gains, and the held-out planner trades lower cost for higher latency.
+The current experiments do not meet this gate. Sol trades time against cost;
+Grok improves time with inconsistent cost gains; the completed Astra profile
+pairs are slower. Keep the supplement off by default. The fresh native Astra
+comparison measures the remaining gap separately.
 
 ## 2. Reduce repeated input without losing task state
 
 The meter now records prompt, tool-schema, visible-history, and replay counts
 without persisting opaque reasoning or private prompt contents. Tool descriptions
 account for 42.3 KB of text within 58.5 KB of serialized tool definitions in the
-pilot. Test compact descriptions next, retaining their necessary instructions.
+pilot. Across both fresh native Astra queue pairs, 74% of Gremlord's extra
+estimated cost comes from additional cached reads, with 76 API requests versus
+38 for Codex. Test compact descriptions next, retaining their necessary instructions.
 Introduce one opt-in change at a time so a speedup has an attributable cause:
 
 - Bound oversized tool results, preserving useful head/tail sections and a way
@@ -62,9 +67,9 @@ Introduce one opt-in change at a time so a speedup has an attributable cause:
   available; do not silently truncate arbitrary conversation history.
 - Test stable compact tool descriptions while retaining the real tool names,
   parameter schemas, tool behavior, and permission semantics.
-- Keep tool declarations and history prefixes stable when possible. The current
-  96.7% cache-hit rate is already high; measure total cached tokens billed as
-  well as hit rate. Extra rounds still cost money with a warm cache.
+- Keep tool declarations and history prefixes stable when possible. The Sol pilot
+  had a 96.7% cache-hit rate, and the fresh Astra queue controls reached 95.8%;
+  measure total cached tokens billed as well as hit rate. Extra rounds still cost money with a warm cache.
 
 Do not drop encrypted reasoning to make the cost number smaller without testing
 multi-turn correctness. Any reasoning-context or effort change is its own
