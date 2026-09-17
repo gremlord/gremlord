@@ -72,8 +72,8 @@ def run(args, task):
         completed = False
         failure = None
         with (call_dir / 'events.jsonl').open('w') as events, (call_dir / 'stderr.log').open('w') as errors:
-            # Inherit the caller's process group: benchmark cancellation kills the
-            # coordinator, this wrapper, Gremlord, Codex, and their tools together.
+            # Inherit the caller's process group. The caller owns cleanup; tools
+            # that detach descendants need additional lifecycle handling.
             process = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.PIPE,
                                        stdout=subprocess.PIPE, stderr=errors, text=True)
             process.stdin.write(task)

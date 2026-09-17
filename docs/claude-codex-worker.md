@@ -1,5 +1,8 @@
 # Claude Code coordinator with a native Codex worker
 
+See the [measured results](claude-codex-worker-results.md) and
+[future direction](harness-direction.md) for the decision after this pilot.
+
 This experiment keeps Claude Code as Gremlord's main harness and delegates
 whole implementation tasks to headless Codex. GPT uses its native prompt,
 tools, reasoning history and compaction inside the worker. The coordinator
@@ -105,6 +108,8 @@ does not force compaction.
 - Each worker launch has its own Gremlord session. Production parent-session
   cost rollup is not implemented; the benchmark explicitly includes both
   components. Worker profile/global gates still apply using configured prices.
+  Pass `--profile NAME` explicitly to use a particular worker profile; otherwise
+  it uses Gremlord's configured default, not the coordinator's environment.
 - The caller supplies timeout/process-tree cleanup. A production task service
   needs cancellation, progress delivery and job lifecycle handling.
 - Delegation adds coordinator tokens, handoff latency and potentially repeated

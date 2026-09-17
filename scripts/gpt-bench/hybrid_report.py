@@ -2,6 +2,7 @@
 """Audit the hybrid experiment and export metrics without native transcripts."""
 import json
 import math
+from datetime import datetime
 from pathlib import Path
 import sqlite3
 import sys
@@ -27,13 +28,20 @@ def export(root):
                       + r['output_tokens'] * rate['output']) / 1e6
         return total
 
-    audits = []
+    audits, checkpoints = [], []
     for pair in summary['pairs']:
         for label in ('baseline', 'mut'):
             candidate = pair[label]
+            directory = root / 'tasks' / pair['task_id'] / f"attempt-{pair['attempt']:03d}" / label
+            for path in sorted(directory.glob('turn-*/grade.json')):
+                grade = json.loads(path.read_text())
+                checkpoints.append(dict(task=pair['task_id'], attempt=pair['attempt'],
+                                        arm=candidate['model'], turn=grade['turn'],
+                                        passed=grade['passed'], agent_ms=grade['agent_ms'],
+                                        wall_ms=grade.get('wall_ms'),
+                                        execution_error=bool(grade.get('execution_error'))))
             if candidate['model'] != 'claude-codex':
                 continue
-            directory = root / 'tasks' / pair['task_id'] / f"attempt-{pair['attempt']:03d}" / label
             rr = [r for r in rows if r['session'] == candidate['session_id']]
             worker = [r for r in rr if r.get('component') == 'worker']
             coordinator = [r for r in rr if r.get('component') == 'coordinator']
@@ -81,9 +89,12 @@ def export(root):
         'model', 'effort', 'context_budget', 'seed', 'attempts', 'codex_version', 'claude_version',
         'max_output_tokens_per_request', 'max_requests_per_candidate', 'price_per_million',
         'manifest_sha256', 'executable_sha256', 'gremlord_binary_sha256', 'scope', 'baseline', 'mut',
-        'coordinator_model', 'coordinator_price_per_million', 'coordinator_context_budget')
+        'coordinator_model', 'coordinator_price_per_million', 'coordinator_context_budget',
+        'git_head', 'git_diff_sha256')
         or k.endswith('.go_sha256') or k.endswith('.py_sha256')}
+    workflow_wall = (datetime.fromisoformat(summary['completed_at']) - datetime.fromisoformat(summary['started_at'])).total_seconds()
     return dict(environment=safe_environment, metrics=json.loads((root / 'metrics.json').read_text()),
+                checkpoints=checkpoints, workflow_wall_seconds=workflow_wall,
                 hybrid_audits=audits, requests=[{k: v for k, v in r.items() if k not in ('session', 'error')} for r in rows])
 
 

@@ -24,8 +24,8 @@ func (p *proxy) requestRoute(arm, component string) (config.Resolved, string) {
 
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
 
-// Only the experimental arm receives this supplement. The same model and
-// effort run the coordinator and worker, and both are billed to the candidate.
+// Only the experimental arm receives this supplement. Coordinator and worker
+// usage are both billed to the candidate, even with different model aliases.
 func (e *executor) prepareHybrid(home, sid string) (string, error) {
 	if err := e.prepareCodexGremlord(home, sid+"~worker"); err != nil {
 		return "", err
