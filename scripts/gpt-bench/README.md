@@ -1,5 +1,26 @@
 # Matched GPT harness pilot
 
+The native Codex PoC adds `codex-gremlord`: stock Codex launched by the actual
+Gremlord binary, using its production router. Compare it with clean Codex:
+
+```sh
+go build -o /tmp/gremlord-codex-poc .
+go build -o /tmp/gremlord-codex-poc-bench ./scripts/gpt-bench
+python3 scripts/gpt-bench/planner.py prepare /tmp/codex-poc-planner-fixtures
+/tmp/gremlord-codex-poc-bench \
+  -model gpt-6-astra -baseline codex -mut codex-gremlord \
+  -gremlord-bin /tmp/gremlord-codex-poc \
+  -manifest /tmp/codex-poc-planner-fixtures/manifest.yaml \
+  -sequence /tmp/codex-poc-planner-fixtures/sequence.json \
+  -out /tmp/codex-poc-planner-results -attempts 1 -timeout 25m \
+  -cache-write-price 12.5
+```
+
+Use fresh fixture/output paths and verify current token prices. The PoC arm
+has a separate router database, a $10 daily profile cap, and per-turn
+`gremlord-usage.json` records for reconciliation with the shared upstream
+meter. Do not add the two ledgers together. See [PoC scope](../../docs/codex-poc.md).
+
 This opt-in Unix driver compares **Claude Code through the current Gremlord OpenAI
 Responses backend** with **native `codex exec`**, using the same configured
 upstream model, `high` effort, and a shared metering proxy. It makes billable API

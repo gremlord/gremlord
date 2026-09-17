@@ -12,6 +12,7 @@ const (
 	HeaderProfile  = "X-Gremlord-Profile"
 	HeaderPinModel = "X-Gremlord-Pin-Model"
 	HeaderCwd      = "X-Gremlord-Cwd"
+	HeaderHarness  = "X-Gremlord-Harness"
 )
 
 // Pre-rename header names, still accepted on read and still written alongside

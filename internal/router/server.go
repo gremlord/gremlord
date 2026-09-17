@@ -18,6 +18,7 @@ import (
 	"github.com/gremlord/gremlord/internal/backend/anthropicbe"
 	"github.com/gremlord/gremlord/internal/backend/clibe"
 	"github.com/gremlord/gremlord/internal/backend/openaibe"
+	"github.com/gremlord/gremlord/internal/backend/responsesbe"
 	"github.com/gremlord/gremlord/internal/budget"
 	"github.com/gremlord/gremlord/internal/config"
 	"github.com/gremlord/gremlord/internal/pricing"
@@ -27,25 +28,26 @@ import (
 )
 
 type Server struct {
-	cfg     atomic.Pointer[config.Config]
-	pricing atomic.Pointer[pricing.Table]
-	token   string
-	dataDir string
-	store   *store.Store
-	anth    *anthropicbe.Backend
-	oai     *openaibe.Backend
-	cli     *clibe.Backend
-	gate    *budget.Gate
-	calib   *calibrator
-	auto    *autoRouter
-	goal    *goalRouter
-	log     *slog.Logger
+	cfg       atomic.Pointer[config.Config]
+	pricing   atomic.Pointer[pricing.Table]
+	token     string
+	dataDir   string
+	store     *store.Store
+	anth      *anthropicbe.Backend
+	oai       *openaibe.Backend
+	responses *responsesbe.Backend
+	cli       *clibe.Backend
+	gate      *budget.Gate
+	calib     *calibrator
+	auto      *autoRouter
+	goal      *goalRouter
+	log       *slog.Logger
 }
 
 func NewServer(cfg *config.Config, token, dataDir string, st *store.Store, logger *slog.Logger) *Server {
 	s := &Server{
 		token: token, dataDir: dataDir, store: st,
-		anth: anthropicbe.New(), oai: openaibe.New(), cli: clibe.New(), log: logger,
+		anth: anthropicbe.New(), oai: openaibe.New(), responses: responsesbe.New(), cli: clibe.New(), log: logger,
 	}
 	s.cfg.Store(cfg)
 	s.pricing.Store(pricing.Load(dataDir, cfg))
@@ -82,6 +84,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST "+wire.LegacyPathReload, s.auth(s.handleReload))
 	mux.HandleFunc("POST /v1/messages", s.auth(s.handleMessages(false)))
 	mux.HandleFunc("POST /v1/messages/count_tokens", s.auth(s.handleMessages(true)))
+	mux.HandleFunc("POST /v1/responses", s.auth(s.handleResponses(false)))
+	mux.HandleFunc("POST /v1/responses/compact", s.auth(s.handleResponses(true)))
+	// Never send unsupported native Codex endpoints to the Anthropic catch-all.
+	mux.HandleFunc("/v1/responses", s.auth(s.unsupportedResponses))
+	mux.HandleFunc("/v1/responses/", s.auth(s.unsupportedResponses))
 	// Catch-all: unknown /v1/* endpoints go to the default anthropic
 	// provider so new Claude Code calls keep working.
 	mux.HandleFunc("/v1/", s.auth(s.handleCatchAll))
@@ -90,7 +97,7 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"ok": true, "version": Version})
+	json.NewEncoder(w).Encode(map[string]any{"ok": true, "version": Version, "native_responses": true})
 }
 
 func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
@@ -112,12 +119,20 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 		apiKeyOK := apiKey != "" && subtle.ConstantTimeCompare([]byte(apiKey), []byte(s.token)) == 1
 		bearerOK := bearer != "" && subtle.ConstantTimeCompare([]byte(bearer), []byte(s.token)) == 1
 		if !apiKeyOK && !bearerOK {
+			if strings.HasPrefix(r.URL.Path, "/v1/responses") {
+				responsesbe.WriteError(w, 401, "gremlord router: invalid local token")
+				return
+			}
 			anthropic.WriteError(w, 401, "authentication_error",
 				"gremlord router: invalid local token (launch sessions via `gremlord`)")
 			return
 		}
 		next(w, r)
 	}
+}
+
+func (s *Server) unsupportedResponses(w http.ResponseWriter, r *http.Request) {
+	responsesbe.WriteError(w, 400, "gremlord: native Responses PoC supports POST /v1/responses and /v1/responses/compact over HTTP only")
 }
 
 func (s *Server) handleMessages(countTokens bool) http.HandlerFunc {
@@ -344,6 +359,10 @@ func (s *Server) recordUsage(r *http.Request, route config.Resolved, alias strin
 // handleCatchAll forwards unrecognized /v1/* calls to the default
 // anthropic provider unmodified.
 func (s *Server) handleCatchAll(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get(wire.HeaderHarness) == "codex" {
+		responsesbe.WriteError(w, 400, "gremlord: this endpoint is unsupported by the native Codex PoC")
+		return
+	}
 	cfg := s.cfg.Load()
 	p, ok := cfg.Providers[config.ProviderAnthropic]
 	if !ok {

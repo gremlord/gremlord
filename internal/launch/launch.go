@@ -1,4 +1,4 @@
-// Package launch assembles the session environment and spawns Claude Code.
+// Package launch assembles the session environment and spawns a coding harness.
 package launch
 
 import (
@@ -23,9 +23,10 @@ import (
 )
 
 type Options struct {
+	Harness      string // claude (default) or codex (native Responses PoC)
 	Profile      string
 	ModelFlag    string // one-shot main-model override (alias)
-	InstanceName string // forwarded to claude as --name
+	InstanceName string // forwarded to the selected harness as --name
 	Passthrough  bool
 	ClaudeArgs   []string
 }
@@ -53,8 +54,11 @@ func newSessionID() string {
 	return fmt.Sprintf("sess-%d-%s", time.Now().Unix(), hex.EncodeToString(buf))
 }
 
-// Run launches Claude Code for one session and blocks until it exits.
+// Run launches the selected harness for one session and blocks until it exits.
 func Run(ctx context.Context, cfg *config.Config, dataDir string, opts Options, logger *slog.Logger) error {
+	if opts.Harness != "" && opts.Harness != "claude" && opts.Harness != "codex" {
+		return fmt.Errorf("unknown harness %q (use claude or codex)", opts.Harness)
+	}
 	profName := opts.Profile
 	if profName == "" {
 		profName = cfg.DefaultProfile
@@ -67,9 +71,22 @@ func Run(ctx context.Context, cfg *config.Config, dataDir string, opts Options, 
 		}
 		prof = p
 	}
+	model := prof.Model
+	if opts.ModelFlag != "" {
+		model = opts.ModelFlag
+	}
+	var codexRoute config.Resolved
+	if opts.Harness == "codex" {
+		var err error
+		codexRoute, err = validateCodex(cfg, prof, opts, model)
+		if err != nil {
+			return err
+		}
+	}
 
 	env := os.Environ()
 	sessionID := newSessionID()
+	child := buildChild(opts)
 
 	if prof.Passthrough || opts.Passthrough {
 		fmt.Fprintf(os.Stderr, "gremlord: passthrough profile — subscription billing, cost tracking unavailable\n")
@@ -89,16 +106,23 @@ func Run(ctx context.Context, cfg *config.Config, dataDir string, opts Options, 
 		if err := mgr.Ensure(ctx); err != nil {
 			return err
 		}
+		if opts.Harness == "codex" {
+			if err := requireNativeResponses(ctx, mgr.BaseURL()); err != nil {
+				return err
+			}
+		}
 
-		model := prof.Model
 		if opts.ModelFlag != "" {
 			if cfg.IsCLIAlias(opts.ModelFlag) {
 				return fmt.Errorf("cli alias %q is only available as an explicit subagent (gremlord-%s), not a session model", opts.ModelFlag, opts.ModelFlag)
 			}
-			model = opts.ModelFlag
 		}
 		cwd, _ := os.Getwd()
-		env = sessionEnv(env, mgr.BaseURL(), token, sessionID, profName, prof, model, cwd)
+		if opts.Harness == "codex" {
+			child, env = codexChild(opts, codexRoute, env, mgr.BaseURL(), token, sessionID, profName)
+		} else {
+			env = sessionEnv(env, mgr.BaseURL(), token, sessionID, profName, prof, model, cwd)
+		}
 
 		recordSession(dataDir, sessionID, profName, true)
 		defer func() {
@@ -109,12 +133,13 @@ func Run(ctx context.Context, cfg *config.Config, dataDir string, opts Options, 
 		// Notice (non-blocking) when the per-alias subagents have drifted from
 		// config. Router-backed sessions only — a passthrough profile doesn't
 		// resolve gremlord aliases, so the generated agents wouldn't work there.
-		noticeAgentDrift(cfg, dataDir)
+		if opts.Harness != "codex" {
+			noticeAgentDrift(cfg, dataDir)
+		}
 	}
 
 	showSplash(cfg)
 
-	child := buildChild(opts)
 	cmd := exec.Command(child[0], child[1:]...)
 	cmd.Env = env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
@@ -123,7 +148,7 @@ func Run(ctx context.Context, cfg *config.Config, dataDir string, opts Options, 
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigs)
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("launching %s: %w (is Claude Code installed?)", child[0], err)
+		return fmt.Errorf("launching %s: %w (is %s installed?)", child[0], err, child[0])
 	}
 	go func() {
 		for sig := range sigs {
@@ -132,7 +157,7 @@ func Run(ctx context.Context, cfg *config.Config, dataDir string, opts Options, 
 	}()
 	err := cmd.Wait()
 	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if errors.As(err, &exitErr) && opts.Harness != "codex" {
 		// Claude Code's own exit code (Ctrl-C etc.) — not our error.
 		return nil
 	}

@@ -39,7 +39,7 @@ func claudeArm(arm string) bool { return arm == "gremlord" || arm == "gpt-effici
 
 func validateArms(baseline, mut string) error {
 	for _, arm := range []string{baseline, mut} {
-		if arm != "codex" && !claudeArm(arm) {
+		if arm != "codex" && arm != "codex-gremlord" && !claudeArm(arm) {
 			return fmt.Errorf("unknown benchmark arm %q", arm)
 		}
 	}
