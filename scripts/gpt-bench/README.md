@@ -1,5 +1,12 @@
 # Matched GPT harness pilot
 
+The experimental `claude-codex` arm keeps Claude Code as coordinator and
+delegates whole tasks to a persistent headless Codex worker through Gremlord.
+It meters both components and resumes the worker across user turns. See the
+[hybrid experiment](../../docs/claude-codex-worker.md) for setup and limits.
+The [results](../../docs/claude-codex-worker-results.md) and
+[direction decision](../../docs/harness-direction.md) summarize the tradeoffs.
+
 The native Codex PoC adds `codex-gremlord`: stock Codex launched by the actual
 Gremlord binary, using its production router. Compare it with clean Codex:
 

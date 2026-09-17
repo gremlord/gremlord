@@ -35,7 +35,9 @@ func benchmarkRoute(route config.Resolved, api string, budget int) (config.Resol
 	return route, nil
 }
 
-func claudeArm(arm string) bool { return arm == "gremlord" || arm == "gpt-efficient" }
+func claudeArm(arm string) bool {
+	return arm == "gremlord" || arm == "gpt-efficient" || arm == "claude-codex"
+}
 
 func validateArms(baseline, mut string) error {
 	for _, arm := range []string{baseline, mut} {
