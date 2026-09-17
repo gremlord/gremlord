@@ -80,6 +80,15 @@ func (e *executor) Run(ctx context.Context, dir string, env, argv []string, stdi
 		}
 		cancel()
 		agentMS := time.Since(start).Milliseconds()
+		// On macOS the monotonic clock can stop during system suspension.
+		// Record wall time separately so an interrupted host cannot look fast.
+		wallMS := time.Now().Round(0).Sub(start.Round(0)).Milliseconds()
+		if wallMS-agentMS > 5000 || agentMS-wallMS > 5000 {
+			reason := fmt.Sprintf("host clock discontinuity on turn %d: wall=%dms elapsed=%dms; exclude timing comparison", state.turn, wallMS, agentMS)
+			if werr := writeJSON(filepath.Join(filepath.Dir(e.proxy.log.Name()), "EXCLUDED.json"), map[string]any{"reason": reason}); werr != nil {
+				return werr
+			}
+		}
 		if werr := os.WriteFile(filepath.Join(turnDir, "stdout.json"), out.Bytes(), 0600); werr != nil {
 			return werr
 		}
@@ -88,7 +97,7 @@ func (e *executor) Run(ctx context.Context, dir string, env, argv []string, stdi
 		}
 		stderr.Write(errs.Bytes())
 		if err != nil {
-			result := map[string]any{"turn": state.turn, "passed": false, "agent_ms": agentMS, "execution_error": err.Error()}
+			result := map[string]any{"turn": state.turn, "passed": false, "agent_ms": agentMS, "wall_ms": wallMS, "execution_error": err.Error()}
 			if werr := writeJSON(filepath.Join(turnDir, "grade.json"), result); werr != nil {
 				return werr
 			}
@@ -98,7 +107,7 @@ func (e *executor) Run(ctx context.Context, dir string, env, argv []string, stdi
 		gradeCtx, gradeCancel := context.WithTimeout(ctx, time.Minute)
 		gradeErr := runCommand(gradeCtx, dir, os.Environ(), step.Verifier, nil, &grading, &grading)
 		gradeCancel()
-		result := map[string]any{"turn": state.turn, "passed": gradeErr == nil, "agent_ms": agentMS, "verifier_output": grading.String()}
+		result := map[string]any{"turn": state.turn, "passed": gradeErr == nil, "agent_ms": agentMS, "wall_ms": wallMS, "verifier_output": grading.String()}
 		if err := writeJSON(filepath.Join(turnDir, "grade.json"), result); err != nil {
 			return err
 		}

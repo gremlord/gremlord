@@ -60,12 +60,14 @@ def report(root):
              f"Model: `{env['model']}`, effort `{env['effort']}`. Each workflow has {turns} user turns in the same session and workspace.", "",
              "| Arm | Workflows passed | Checkpoints | Agent seconds | API requests | Tool calls | Estimated USD |",
              "| --- | --- | --- | --- | --- | --- | --- |"]
+    if env.get('coordinator_model'):
+        lines[3:3] = [f"The hybrid coordinator uses `{env['coordinator_model']}`; its worker uses `{env['model']}`. Costs include both models at their recorded rates.", ""]
     for arm, m in metrics.items():
         lower_bound = "≥ " if m['unknown_usage_requests'] else ""
         lines.append(f"| {arm} | {m['workflows_passed']}/{m['attempts']} | {m['checkpoints_passed']}/{m['checkpoints_expected']} | {m['agent_seconds']:.1f} | {m['requests']} | {m['tool_calls']} | {lower_bound}{m['estimated_usd']:.4f} |")
     lines += ["", "| Arm | Task | Attempt | User turn | Cumulative checks | Seconds | Requests | Encrypted reasoning items on first request |",
               "| --- | --- | --- | --- | --- | --- | --- | --- |"] + detail
-    lines += ["", "All repetitions are included above. A later successful turn cannot erase a failed earlier checkpoint. Follow-up prompts contain changed requirements; grader feedback is not sent to the models. Identical model/effort, isolated homes/workspaces, and frozen external graders are used for both arms.",
+    lines += ["", "All repetitions are included above. A later successful turn cannot erase a failed earlier checkpoint. Follow-up prompts contain changed requirements; grader feedback is not sent to the models. Model/effort settings are recorded above; isolated homes/workspaces and frozen external graders are used for both arms.",
               "", "Input includes cache reads and writes once; output includes reasoning. Cache writes are priced separately when the meter records them. Costs use the recorded local rates and are estimates, not invoices. First-output time means the first nonempty upstream delta (text, summary, or tool arguments), not an invisible reasoning token. API durations include networking and streaming. Instruction/description bytes count decoded UTF-8; tool schemas, parameter schemas, and visible input count serialized JSON. None are token estimates.",
               "", "A ≥ cost has incomplete metering: an interrupted successful HTTP stream returned no terminal usage. The recorded spend omits that request's unknown billed tokens. Timed-out workflows also completed less work, so their raw time/cost cannot be compared as successful-completion latency/cost. Cancellations are retained in request-error counts.",
               "", "Repeated attempts of a workflow are not independent tasks. No general parity or compaction claim follows from this run. Inspect requests.jsonl, per-turn grades/patches, and environment.json for evidence.", ""]

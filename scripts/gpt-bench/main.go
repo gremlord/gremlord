@@ -43,6 +43,8 @@ type measurement struct {
 	Session                   string `json:"session"`
 	Turn                      int    `json:"turn"`
 	Arm                       string `json:"arm"`
+	Component                 string `json:"component,omitempty"`
+	Model                     string `json:"model,omitempty"`
 	Request                   int    `json:"request"`
 	Status                    int    `json:"status"`
 	DurationMS                int64  `json:"duration_ms"`
@@ -79,18 +81,19 @@ type measurement struct {
 }
 
 type proxy struct {
-	url, token string
-	route      config.Resolved
-	key        string
-	backend    *openaibe.Backend
-	client     *http.Client
-	store      *store.Store
-	prices     *pricing.Table
-	log        *os.File
-	mu         sync.Mutex
-	arms       map[string]string
-	counts     map[string]int
-	turns      map[string]int
+	url, token  string
+	route       config.Resolved
+	coordinator *config.Resolved
+	key         string
+	backend     *openaibe.Backend
+	client      *http.Client
+	store       *store.Store
+	prices      *pricing.Table
+	log         *os.File
+	mu          sync.Mutex
+	arms        map[string]string
+	counts      map[string]int
+	turns       map[string]int
 }
 
 func main() {
@@ -104,6 +107,7 @@ func run() error {
 	manifestPath := flag.String("manifest", "", "local eval manifest (required)")
 	out := flag.String("out", "", "new artifact directory (required; no resume)")
 	alias := flag.String("model", "gpt-5.6-sol", "configured Responses alias")
+	coordinatorAlias := flag.String("coordinator-model", "", "optional OpenAI-compatible coordinator alias for claude-codex; uses Responses, defaults to -model")
 	api := flag.String("api", "", "optional benchmark-only API override: responses")
 	contextBudget := flag.Int("context-budget", 600000, "declared input budget, capped by the configured model window")
 	cacheWritePrice := flag.Float64("cache-write-price", -1, "benchmark-only cache-write USD per million tokens; -1 uses local pricing")
@@ -111,8 +115,8 @@ func run() error {
 	timeout := flag.Duration("timeout", 6*time.Minute, "time limit per candidate")
 	seed := flag.Uint64("seed", 20260915, "paired launch-order seed")
 	sequencePath := flag.String("sequence", "", "optional JSON array of user turns and external verifiers (one manifest task)")
-	baseline := flag.String("baseline", "codex", "baseline arm: codex, codex-gremlord, gremlord, or gpt-efficient")
-	mut := flag.String("mut", "gremlord", "comparison arm: codex, codex-gremlord, gremlord, or gpt-efficient")
+	baseline := flag.String("baseline", "codex", "baseline arm: codex, codex-gremlord, gremlord, gpt-efficient, or claude-codex")
+	mut := flag.String("mut", "gremlord", "comparison arm: codex, codex-gremlord, gremlord, gpt-efficient, or claude-codex")
 	gremlordBin := flag.String("gremlord-bin", "", "PoC binary required for codex-gremlord arm")
 	flag.Parse()
 	if math.IsNaN(*cacheWritePrice) || math.IsInf(*cacheWritePrice, 0) || (*cacheWritePrice < 0 && *cacheWritePrice != -1) {
@@ -121,9 +125,9 @@ func run() error {
 	if err := validateArms(*baseline, *mut); err != nil {
 		return err
 	}
-	if *baseline == "codex-gremlord" || *mut == "codex-gremlord" {
+	if *baseline == "codex-gremlord" || *mut == "codex-gremlord" || *baseline == "claude-codex" || *mut == "claude-codex" {
 		if *gremlordBin == "" {
-			return errors.New("codex-gremlord requires -gremlord-bin")
+			return errors.New("codex-gremlord and claude-codex require -gremlord-bin")
 		}
 		bin, err := exec.LookPath(*gremlordBin)
 		if err != nil {
@@ -180,6 +184,24 @@ func run() error {
 	if route.Provider.Key() == "" {
 		return errors.New("configured provider has no key")
 	}
+	var coordinator *config.Resolved
+	if *coordinatorAlias != "" {
+		if *baseline != "claude-codex" && *mut != "claude-codex" {
+			return errors.New("coordinator-model requires a claude-codex arm")
+		}
+		cr, err := cfg.Resolve(*coordinatorAlias)
+		if err != nil {
+			return err
+		}
+		cr, err = benchmarkRoute(cr, config.APIResponses, *contextBudget)
+		if err != nil {
+			return fmt.Errorf("coordinator: %w", err)
+		}
+		if cr.Provider.Key() == "" {
+			return errors.New("coordinator provider has no key")
+		}
+		coordinator = &cr
+	}
 	claude, err := exec.LookPath("claude")
 	if err != nil {
 		return err
@@ -212,9 +234,20 @@ func run() error {
 			return errors.New("cache-write-price requires configured input/output pricing")
 		}
 		price.CacheWrite = *cacheWritePrice
-		prices = pricing.Load(dataDir, &config.Config{Pricing: map[string]config.Price{route.Model.ID: price}})
+		overrides := map[string]config.Price{route.Model.ID: price}
+		if coordinator != nil && coordinator.Model.ID != route.Model.ID {
+			cp, ok := prices.Get(coordinator.Model.ID)
+			if !ok {
+				return errors.New("coordinator requires configured pricing")
+			}
+			overrides[coordinator.Model.ID] = cp
+		}
+		prices = pricing.Load(dataDir, &config.Config{Pricing: overrides})
 	}
-	p := &proxy{route: route, key: route.Provider.Key(), token: hex.EncodeToString(tokenBytes), backend: openaibe.New(), client: &http.Client{Transport: backend.NewTransport()}, store: db, prices: prices, log: log, arms: map[string]string{}, counts: map[string]int{}}
+	if coordinator != nil && !prices.Has(coordinator.Model.ID) {
+		return errors.New("coordinator requires configured pricing")
+	}
+	p := &proxy{route: route, coordinator: coordinator, key: route.Provider.Key(), token: hex.EncodeToString(tokenBytes), backend: openaibe.New(), client: &http.Client{Transport: backend.NewTransport()}, store: db, prices: prices, log: log, arms: map[string]string{}, counts: map[string]int{}}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return err
@@ -236,6 +269,16 @@ func run() error {
 	meta := map[string]any{"model": route.Model.ID, "effort": "high", "context_budget": route.Model.ContextBudget(), "max_output_tokens_per_request": 32768, "max_requests_per_candidate": 64, "seed": *seed, "attempts": *attempts, "timeout": timeout.String(), "claude_version": version(claude), "codex_version": version(codex), "manifest_sha256": fmt.Sprintf("%x", sha256.Sum256(manifestBytes)), "price_per_million": price, "priced": priced, "price_source": "local Gremlord pricing table; estimates, not invoices", "git_head": commandOutput("git", "rev-parse", "HEAD"), "git_diff_sha256": fmt.Sprintf("%x", sha256.Sum256([]byte(commandOutput("git", "diff", "HEAD")))), "scope": "local synthetic coding pilot; native harnesses, no web/MCP/subagents; not a compaction or parity proof"}
 	meta["user_turns_per_candidate"] = max(1, len(sequence))
 	meta["meter_version"] = "cache-write-v1"
+	if *baseline == "claude-codex" || *mut == "claude-codex" {
+		meta["scope"] = "Experimental Claude Code coordinator plus resumable native Codex worker; identical GPT model/effort; all coordinator and worker usage included; no web/MCP/additional subagents; no messaging/classifier parity claim"
+	}
+	if coordinator != nil {
+		cp, _ := prices.Get(coordinator.Model.ID)
+		meta["coordinator_model"] = coordinator.Model.ID
+		meta["coordinator_price_per_million"] = cp
+		meta["coordinator_context_budget"] = coordinator.Model.ContextBudget()
+		meta["scope"] = "Mixed-model Claude Code coordinator plus native Codex GPT worker; Responses/high effort in both; all costs included; exploratory integration pilot, not an isolated harness effect"
+	}
 	if *gremlordBin != "" {
 		binary, err := os.ReadFile(*gremlordBin)
 		if err != nil {
@@ -259,7 +302,7 @@ func run() error {
 			meta["executable_sha256"] = fmt.Sprintf("%x", sha256.Sum256(data))
 		}
 	}
-	for _, name := range []string{"main.go", "arms.go", "sequence.go", "codex_gremlord.go", "fixtures.py", "complex.py", "planner.py"} {
+	for _, name := range []string{"main.go", "arms.go", "sequence.go", "codex_gremlord.go", "hybrid.go", "hybrid_worker.py", "fixtures.py", "complex.py", "planner.py"} {
 		source, err := os.ReadFile(filepath.Join("scripts", "gpt-bench", name))
 		if err != nil {
 			return err
@@ -320,7 +363,7 @@ func (p *proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request", 400)
 		return
 	}
-	route := p.route
+	route, _ := p.requestRoute(arm, "coordinator")
 	route.Model.ExecutionProfile = ""
 	if arm == "gpt-efficient" {
 		route.Model.ExecutionProfile = "gpt-efficient-v1"
@@ -341,7 +384,7 @@ func (p *proxy) upstream(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	sid := parts[1]
+	sid := strings.TrimSuffix(parts[1], "~worker")
 	p.mu.Lock()
 	arm := p.arms[sid]
 	turn := p.turns[sid]
@@ -353,6 +396,14 @@ func (p *proxy) upstream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m := measurement{Session: sid, Turn: turn, Arm: arm, Request: n, Status: 502}
+	if arm == "claude-codex" {
+		m.Component = "coordinator"
+		if parts[1] != sid {
+			m.Component = "worker"
+		}
+	}
+	route, key := p.requestRoute(arm, m.Component)
+	m.Model = route.Model.ID
 	m.ResponsesLite = r.Header.Get("X-Openai-Internal-Codex-Responses-Lite") == "true"
 	start := time.Now()
 	recorded := false
@@ -400,7 +451,7 @@ func (p *proxy) upstream(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, m.Error, m.Status)
 		return
 	}
-	if model != p.route.Model.ID || m.Effort != "high" {
+	if model != route.Model.ID || m.Effort != "high" {
 		m.Status = 400
 		m.Error = "model or effort differs from benchmark contract"
 		http.Error(w, m.Error, 400)
@@ -425,7 +476,7 @@ func (p *proxy) upstream(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "marshal failure", 500)
 		return
 	}
-	req, err := http.NewRequestWithContext(r.Context(), "POST", strings.TrimSuffix(p.route.Provider.BaseURL, "/")+"/responses", bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(r.Context(), "POST", strings.TrimSuffix(route.Provider.BaseURL, "/")+"/responses", bytes.NewReader(data))
 	if err != nil {
 		m.Error = err.Error()
 		http.Error(w, "request failure", 500)
@@ -436,7 +487,7 @@ func (p *proxy) upstream(w http.ResponseWriter, r *http.Request) {
 	req.Header.Del("Content-Length")
 	req.Header.Del("Content-Encoding")
 	req.Header.Del("Accept-Encoding") // let Go negotiate/decompress for the meter
-	req.Header.Set("Authorization", "Bearer "+p.key)
+	req.Header.Set("Authorization", "Bearer "+key)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := p.client.Do(req)
 	if err != nil {
@@ -560,13 +611,14 @@ func measureResponse(data []byte, m *measurement) {
 }
 
 func (p *proxy) record(m measurement) {
+	route, _ := p.requestRoute(m.Arm, m.Component)
 	ordinaryInput := m.Input - m.Cached - m.CacheWrite
-	cost, priced := p.prices.Cost(p.route.Model.ID, ordinaryInput, m.Output, m.Cached, m.CacheWrite)
+	cost, priced := p.prices.Cost(route.Model.ID, ordinaryInput, m.Output, m.Cached, m.CacheWrite)
 	errType := ""
 	if m.Error != "" {
 		errType = "benchmark_upstream_error"
 	}
-	err := p.store.RecordUsage(store.UsageEvent{TS: time.Now(), SessionID: m.Session, Profile: "gpt-bench", Provider: p.route.ProviderName, Model: p.route.Model.ID, Alias: m.Arm, InputTokens: ordinaryInput, OutputTokens: m.Output, CacheReadTokens: m.Cached, CacheWriteTokens: m.CacheWrite, CostUSD: cost, Priced: priced, Status: m.Status, ErrType: errType, DurationMS: m.DurationMS, CtxBudget: p.route.Model.ContextBudget()})
+	err := p.store.RecordUsage(store.UsageEvent{TS: time.Now(), SessionID: m.Session, Profile: "gpt-bench", Provider: route.ProviderName, Model: route.Model.ID, Alias: m.Arm, InputTokens: ordinaryInput, OutputTokens: m.Output, CacheReadTokens: m.Cached, CacheWriteTokens: m.CacheWrite, CostUSD: cost, Priced: priced, Status: m.Status, ErrType: errType, DurationMS: m.DurationMS, CtxBudget: route.Model.ContextBudget()})
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if err != nil {
@@ -628,6 +680,13 @@ func (e *executor) runTurn(ctx context.Context, dir string, env, argv []string, 
 			}
 		}
 		args = append(args, "--safe-mode", "--disable-slash-commands", "--effort", "high")
+		if arm == "claude-codex" {
+			supplement, err := e.prepareHybrid(values["HOME"], sid)
+			if err != nil {
+				return err
+			}
+			args = append(args, "--append-system-prompt", supplement)
+		}
 		if state == nil {
 			args = append(args, "--no-session-persistence")
 		} else if state.turn == 1 {
