@@ -22,14 +22,16 @@ var (
 	flagName        string
 	flagNoClauder   bool
 	flagPassthrough bool
+	flagHarness     string
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "gremlord [flags] [-- claude args...]",
-	Short: "Multi-model, cost-controlled harness wrapping Claude Code",
+	Use:   "gremlord [flags] [-- harness args...]",
+	Short: "Multi-model, cost-controlled launcher for Claude Code and Codex",
 	Long: `gremlord launches Claude Code through a local router that can serve
 Anthropic, OpenAI, xAI, and open-weight models, with budgets and spend
-tracking. Everything after -- is passed to claude verbatim.`,
+tracking. Use --harness codex for the experimental native GPT path.
+Everything after -- is passed to the selected harness.`,
 	Version:       router.Version,
 	SilenceUsage:  true,
 	SilenceErrors: true,
@@ -44,6 +46,7 @@ tracking. Everything after -- is passed to claude verbatim.`,
 			claudeArgs = args[at:]
 		}
 		return launch.Run(cmd.Context(), cfg, dataDir, launch.Options{
+			Harness:      flagHarness,
 			Profile:      flagProfile,
 			ModelFlag:    flagModel,
 			InstanceName: flagName,
@@ -54,9 +57,10 @@ tracking. Everything after -- is passed to claude verbatim.`,
 }
 
 func init() {
+	rootCmd.Flags().StringVar(&flagHarness, "harness", "claude", "agent harness: claude or codex (experimental, fixed GPT Responses alias)")
 	rootCmd.Flags().StringVarP(&flagProfile, "profile", "p", "", "profile from ~/.gremlord/config.yaml")
 	rootCmd.Flags().StringVar(&flagModel, "model", "", "one-shot main-model alias override")
-	rootCmd.Flags().StringVar(&flagName, "name", "", "session name (forwarded to claude)")
+	rootCmd.Flags().StringVar(&flagName, "name", "", "session name (forwarded to the selected harness)")
 	rootCmd.Flags().BoolVar(&flagNoClauder, "no-clauder", false, "")
 	// Every session is a bare claude now, so there is no wrap layer to opt out
 	// of. Kept as an accepted no-op so existing aliases and scripts still run.

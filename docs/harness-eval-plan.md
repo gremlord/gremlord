@@ -1,6 +1,10 @@
 # Plan: evaluating Codex vs Claude Code as the base harness
 
 Status: proposal, 2026-09-08. Phase 0 implemented 2026-09-08; Phases 1–5 not started.
+Update 2026-09-16: a separate [native Codex PoC](codex-poc.md) adds an
+interactive launcher and Responses passthrough with metering/budgets for
+fixed GPT aliases. Reverse translation, the general evaluator harness
+interface and the crossed experiment below remain unimplemented.
 Follow-up: `scripts/gpt-bench` provides an isolated local GPT harness pilot using
 the evaluator's injected executor and a shared API meter. It does not implement
 the production harness interface, Docker integration, or inbound Responses

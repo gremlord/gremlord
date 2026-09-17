@@ -111,14 +111,28 @@ func run() error {
 	timeout := flag.Duration("timeout", 6*time.Minute, "time limit per candidate")
 	seed := flag.Uint64("seed", 20260915, "paired launch-order seed")
 	sequencePath := flag.String("sequence", "", "optional JSON array of user turns and external verifiers (one manifest task)")
-	baseline := flag.String("baseline", "codex", "baseline arm: codex, gremlord, or gpt-efficient")
-	mut := flag.String("mut", "gremlord", "comparison arm: codex, gremlord, or gpt-efficient")
+	baseline := flag.String("baseline", "codex", "baseline arm: codex, codex-gremlord, gremlord, or gpt-efficient")
+	mut := flag.String("mut", "gremlord", "comparison arm: codex, codex-gremlord, gremlord, or gpt-efficient")
+	gremlordBin := flag.String("gremlord-bin", "", "PoC binary required for codex-gremlord arm")
 	flag.Parse()
 	if math.IsNaN(*cacheWritePrice) || math.IsInf(*cacheWritePrice, 0) || (*cacheWritePrice < 0 && *cacheWritePrice != -1) {
 		return errors.New("cache-write-price must be nonnegative, or -1 to use local pricing")
 	}
 	if err := validateArms(*baseline, *mut); err != nil {
 		return err
+	}
+	if *baseline == "codex-gremlord" || *mut == "codex-gremlord" {
+		if *gremlordBin == "" {
+			return errors.New("codex-gremlord requires -gremlord-bin")
+		}
+		bin, err := exec.LookPath(*gremlordBin)
+		if err != nil {
+			return err
+		}
+		*gremlordBin, err = filepath.Abs(bin)
+		if err != nil {
+			return err
+		}
 	}
 	if *manifestPath == "" || *out == "" {
 		return errors.New("-manifest and -out are required")
@@ -222,6 +236,13 @@ func run() error {
 	meta := map[string]any{"model": route.Model.ID, "effort": "high", "context_budget": route.Model.ContextBudget(), "max_output_tokens_per_request": 32768, "max_requests_per_candidate": 64, "seed": *seed, "attempts": *attempts, "timeout": timeout.String(), "claude_version": version(claude), "codex_version": version(codex), "manifest_sha256": fmt.Sprintf("%x", sha256.Sum256(manifestBytes)), "price_per_million": price, "priced": priced, "price_source": "local Gremlord pricing table; estimates, not invoices", "git_head": commandOutput("git", "rev-parse", "HEAD"), "git_diff_sha256": fmt.Sprintf("%x", sha256.Sum256([]byte(commandOutput("git", "diff", "HEAD")))), "scope": "local synthetic coding pilot; native harnesses, no web/MCP/subagents; not a compaction or parity proof"}
 	meta["user_turns_per_candidate"] = max(1, len(sequence))
 	meta["meter_version"] = "cache-write-v1"
+	if *gremlordBin != "" {
+		binary, err := os.ReadFile(*gremlordBin)
+		if err != nil {
+			return err
+		}
+		meta["gremlord_binary_sha256"] = fmt.Sprintf("%x", sha256.Sum256(binary))
+	}
 	if *cacheWritePrice >= 0 {
 		meta["cache_write_price_override"] = *cacheWritePrice
 		meta["price_source"] = "local Gremlord rates with explicit benchmark-only cache-write override; estimates, not invoices"
@@ -238,7 +259,7 @@ func run() error {
 			meta["executable_sha256"] = fmt.Sprintf("%x", sha256.Sum256(data))
 		}
 	}
-	for _, name := range []string{"main.go", "arms.go", "sequence.go", "fixtures.py", "complex.py", "planner.py"} {
+	for _, name := range []string{"main.go", "arms.go", "sequence.go", "codex_gremlord.go", "fixtures.py", "complex.py", "planner.py"} {
 		source, err := os.ReadFile(filepath.Join("scripts", "gpt-bench", name))
 		if err != nil {
 			return err
@@ -256,7 +277,7 @@ func run() error {
 			return err
 		}
 	}
-	runner := &eval.Runner{Options: eval.Options{Baseline: *baseline, MUT: *mut, Judge: "none", Attempts: *attempts, Timeout: *timeout, Seed: *seed, OutputDir: absOut, BaseURL: p.url, Token: p.token, Profile: "gpt-bench", ClaudeBin: claude, DataDir: absOut}, Exec: &executor{proxy: p, claude: claude, codex: codex, sequence: sequence}}
+	runner := &eval.Runner{Options: eval.Options{Baseline: *baseline, MUT: *mut, Judge: "none", Attempts: *attempts, Timeout: *timeout, Seed: *seed, OutputDir: absOut, BaseURL: p.url, Token: p.token, Profile: "gpt-bench", ClaudeBin: claude, DataDir: absOut}, Exec: &executor{proxy: p, claude: claude, codex: codex, gremlord: *gremlordBin, sequence: sequence}}
 	runner.OnCandidate = func(c eval.CandidateResult) {
 		fmt.Printf("%s %s pass=%t time=%.1fs requests=%d input=%d cached=%d output=%d estimated_usd=%.4f\n", c.Model, c.Status, c.Verifier.Passed, float64(c.AgentMS)/1000, c.Usage.Requests, c.Usage.InputTokens, c.Usage.CacheReadTokens, c.Usage.OutputTokens, c.Usage.CostUSD)
 	}
@@ -559,6 +580,7 @@ func (p *proxy) record(m measurement) {
 type executor struct {
 	proxy         *proxy
 	claude, codex string
+	gremlord      string
 	sequence      []sequenceTurn
 }
 
@@ -624,7 +646,7 @@ func (e *executor) runTurn(ctx context.Context, dir string, env, argv []string, 
 		}
 		return err
 	}
-	if arm != "codex" {
+	if arm != "codex" && arm != "codex-gremlord" {
 		return fmt.Errorf("unknown harness %q", arm)
 	}
 	codexHome := filepath.Join(values["HOME"], ".codex")
@@ -634,13 +656,22 @@ func (e *executor) runTurn(ctx context.Context, dir string, env, argv []string, 
 	clean = append(clean, "CODEX_HOME="+codexHome, "GREMLORD_BENCH_TOKEN="+e.proxy.token)
 	finalPath := filepath.Join(artifactDir, "native-final.txt")
 	args := []string{e.codex, "exec"}
+	if arm == "codex-gremlord" {
+		if err := e.prepareCodexGremlord(values["HOME"], sid); err != nil {
+			return err
+		}
+		args = []string{e.gremlord, "--harness", "codex", "--model", "benchmark", "--", "exec"}
+	}
 	if state != nil && state.turn > 1 {
 		if state.nativeThread == "" {
 			return errors.New("missing native thread for resume")
 		}
 		args = append(args, "resume")
 	}
-	args = append(args, "--json", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "-m", e.proxy.route.Model.ID, "-o", finalPath)
+	args = append(args, "--json", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "-o", finalPath)
+	if arm == "codex" {
+		args = append(args, "-m", e.proxy.route.Model.ID)
+	}
 	if state == nil {
 		args = append(args, "--ephemeral")
 	}
@@ -649,6 +680,19 @@ func (e *executor) runTurn(ctx context.Context, dir string, env, argv []string, 
 	}
 	overrides := []string{`model_provider="bench"`, `model_providers.bench.name="OpenAI"`, `model_providers.bench.base_url="` + e.proxy.url + "/upstream/" + sid + `/v1"`, `model_providers.bench.env_key="GREMLORD_BENCH_TOKEN"`, `model_providers.bench.wire_api="responses"`, `model_providers.bench.requires_openai_auth=false`, `model_providers.bench.request_max_retries=1`, `model_providers.bench.stream_max_retries=1`, `model_reasoning_effort="high"`, fmt.Sprintf("model_context_window=%d", e.proxy.route.Model.ContextBudget()), fmt.Sprintf("model_auto_compact_token_limit=%d", e.proxy.route.Model.ContextBudget()*9/10), `web_search="disabled"`, `agents.enabled=false`, `features.multi_agent=false`, `features.multi_agent_v2=false`, `features.responses_websockets=false`, `features.responses_websockets_v2=false`, `features.request_compression=false`, `features.skills=false`, `features.apps=false`, `features.plugins=false`, `shell_environment_policy.inherit="all"`}
 	for _, c := range overrides {
+		if arm == "codex-gremlord" {
+			// The production launcher owns gateway identity and transport;
+			// keep the same retry policy without replacing that provider.
+			if strings.HasPrefix(c, "model_provider=") {
+				continue
+			}
+			if strings.HasPrefix(c, "model_providers.bench.") {
+				continue
+			}
+			if strings.HasPrefix(c, "features.responses_websockets") || strings.HasPrefix(c, "features.request_compression") {
+				continue
+			}
+		}
 		args = append(args, "-c", c)
 	}
 	if state != nil && state.turn > 1 {
@@ -662,6 +706,11 @@ func (e *executor) runTurn(ctx context.Context, dir string, env, argv []string, 
 	}
 	defer events.Close()
 	err = runCommand(ctx, dir, clean, args, strings.NewReader(prompt), io.MultiWriter(&raw, events), stderr)
+	if arm == "codex-gremlord" {
+		if auditErr := auditCodexGremlord(values["HOME"], artifactDir); err == nil && auditErr != nil {
+			err = auditErr
+		}
+	}
 	if state != nil {
 		for _, line := range bytes.Split(raw.Bytes(), []byte{'\n'}) {
 			var event struct {

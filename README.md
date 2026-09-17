@@ -59,6 +59,10 @@ gremlord --model grok     # one-off model override
 gremlord cost             # where did today's $4.31 go?
 ```
 
+Experimental: `gremlord --harness codex --model gpt-6-astra` runs native
+Codex through Gremlord's router and token budgets. It requires a fixed GPT
+Responses alias. See the [Codex PoC](docs/codex-poc.md) for setup and scope.
+
 ## Why
 
 Claude Code is a great harness, and it keeps getting better — forking it means losing that. But it only talks to one provider, and it doesn't answer two questions you eventually ask: *how much did that session cost?* and *can I run the cheap parts on a cheap model?*
