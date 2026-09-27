@@ -196,6 +196,10 @@ var setupCmd = &cobra.Command{
 			fmt.Printf("⚠ could not write peer guidance: %v\n", err)
 		}
 
+		if cfg, err := config.Load(); err == nil {
+			installMesh(cfg)
+		}
+
 		if ensureClauder() {
 			fmt.Println("  clauder's persistent memory is available to sessions over its own MCP server")
 			fmt.Println("  (cross-instance messaging is native to Claude Code — nothing to configure)")

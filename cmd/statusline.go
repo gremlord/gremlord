@@ -69,7 +69,13 @@ var statuslineCmd = &cobra.Command{
 			goalReason = reason
 		}
 
-		fmt.Println(statusLine(orDefault(profile, "gremlord"), modelPart, sess, day, cfg.Budgets, goalReason))
+		line := statusLine(orDefault(profile, "gremlord"), modelPart, sess, day, cfg.Budgets, goalReason)
+		if cfg.Mesh != nil && cfg.Mesh.Enabled {
+			if seg := meshStatus(dataDir, sessionID); seg != "" {
+				line += " · " + seg
+			}
+		}
+		fmt.Println(line)
 		return nil
 	},
 }

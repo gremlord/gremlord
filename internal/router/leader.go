@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/meshint"
 	"github.com/gremlord/gremlord/internal/store"
 
 	"github.com/gremlord/gremlord/internal/wire"
@@ -137,6 +138,14 @@ func (m *Manager) lead(ctx context.Context, ln net.Listener) error {
 
 	// Hot-reload on direct edits to ~/.gremlord/config.yaml.
 	go watchConfig(ctx, srv, m.Log)
+
+	// Gremlord Mesh runs in whichever process holds the router port.
+	if ml, err := meshint.Start(ctx, cfg, m.DataDir, m.Token, m.BaseURL(), Version, srv.Complete, m.Log); err != nil {
+		m.Log.Warn("mesh leader failed to start", "err", err)
+	} else if ml != nil {
+		srv.SetMesh(ml)
+		defer func() { srv.SetMesh(nil); ml.Close() }()
+	}
 
 	m.writeDiscovery()
 	defer m.removeDiscovery()

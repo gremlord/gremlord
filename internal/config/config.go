@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	meshleader "github.com/gremlord/gremlord-mesh/leader"
 )
 
 const (
@@ -48,6 +50,8 @@ type Config struct {
 	// SplashSeconds holds the launch banner for this many seconds before
 	// Claude Code takes the terminal. nil = default, 0 = off.
 	SplashSeconds *int `yaml:"splash_seconds"`
+	// Mesh configures Gremlord Mesh (off unless mesh.enabled is true).
+	Mesh *meshleader.Config `yaml:"mesh"`
 }
 
 // RouteRule is a dynamic alias: a cheap classifier model assesses each new

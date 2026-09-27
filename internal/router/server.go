@@ -3,6 +3,7 @@
 package router
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	meshleader "github.com/gremlord/gremlord-mesh/leader"
 
 	"github.com/gremlord/gremlord/internal/anthropic"
 	"github.com/gremlord/gremlord/internal/backend"
@@ -40,6 +43,26 @@ type Server struct {
 	auto    *autoRouter
 	goal    *goalRouter
 	log     *slog.Logger
+	mesh    atomic.Pointer[meshleader.Leader]
+}
+
+// SetMesh attaches (or, with nil, detaches) the mesh leader so requests
+// get stop handling and unread nudges.
+func (s *Server) SetMesh(l *meshleader.Leader) { s.mesh.Store(l) }
+
+// Complete runs a one-shot prompt on a model alias through the router's own
+// backends; the mesh classifier decider uses it.
+func (s *Server) Complete(ctx context.Context, alias, prompt string, maxTokens int) (string, error) {
+	resp, err := s.runClassifier(ctx, config.RouteRule{Classifier: alias}, s.cfg.Load(), prompt, maxTokens)
+	if err != nil {
+		return "", err
+	}
+	for _, block := range resp.Content {
+		if block.Type == "text" {
+			return block.Text, nil
+		}
+	}
+	return "", fmt.Errorf("model returned no text")
 }
 
 func NewServer(cfg *config.Config, token, dataDir string, st *store.Store, logger *slog.Logger) *Server {
@@ -136,6 +159,26 @@ func (s *Server) handleMessages(countTokens bool) http.HandlerFunc {
 		cfg := s.cfg.Load()
 		calib := s.calib.get()
 		sessionID := wire.Session(r.Header)
+		if ml := s.mesh.Load(); ml != nil && !countTokens && sessionID != "" {
+			// Gremlord Mesh: a pending human stop is answered here with a
+			// synthetic end_turn (no upstream call); otherwise unread mail may
+			// add a nudge, and the guard can cut the stream if a stop arrives
+			// mid-flight.
+			plan := ml.Plan(sessionID, raw)
+			if plan.Stop != "" {
+				meshleader.WriteSynthetic(w, raw, plan.Stop)
+				plan.Delivered()
+				s.log.Info("mesh_stop", "session", sessionID)
+				return
+			}
+			raw = plan.Body
+			ctx, cancel := context.WithCancel(r.Context())
+			defer cancel()
+			r = r.WithContext(ctx)
+			guarded, done := ml.Guard(sessionID, raw, w, cancel)
+			defer done()
+			w = guarded
+		}
 		// gauge is the budget this session's client-facing token counts
 		// are scaled against — one budget per routing rule, so the
 		// context gauge does not change meaning when the tier does. 0
