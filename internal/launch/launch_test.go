@@ -87,7 +87,7 @@ func TestSessionEnvWithPinTiers(t *testing.T) {
 // change every session's permission posture.
 var wantTools = []string{
 	"Read", "Write", "Edit", "Glob", "Grep", "Bash(*)",
-	"WebFetch", "WebSearch", "mcp__clauder__*",
+	"WebFetch", "WebSearch", "mcp__clauder__*", "mcp__gremlord-mesh__*",
 }
 
 // claude's --allowedTools is variadic — it consumes args until the next flag,

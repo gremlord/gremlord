@@ -201,10 +201,11 @@ func sessionEnv(env []string, baseURL, token, sessionID, profName string, prof c
 // autoApprovedTools is the tool allowlist every gremlord session runs with.
 // It is the set `clauder wrap --slave` used to pass before gremlord spawned
 // claude itself, kept identical so the launch path change is invisible.
-// Allowlisting mcp__clauder__* is inert when clauder is not installed.
+// Allowlisting mcp__clauder__* is inert when clauder is not installed, and
+// likewise mcp__gremlord-mesh__* when the mesh MCP server is not registered.
 var autoApprovedTools = []string{
 	"Read", "Write", "Edit", "Glob", "Grep", "Bash(*)",
-	"WebFetch", "WebSearch", "mcp__clauder__*",
+	"WebFetch", "WebSearch", "mcp__clauder__*", "mcp__gremlord-mesh__*",
 }
 
 // buildChild spawns claude directly. Claude Code registers each session in
