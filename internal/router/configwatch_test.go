@@ -88,7 +88,11 @@ func TestPollReloadSurvivesBadEdit(t *testing.T) {
 	touch(t, path, "broken")
 	waitFor(t, 3*time.Second, func() bool { return calls.Load() == 1 })
 
-	// Second change: reload succeeds. Watcher picked it back up.
+	// Second change: reload succeeds. Watcher picked it back up. The poller
+	// detects change by mtime equality, and CI filesystems round timestamps
+	// to milliseconds, so back-to-back writes can share an mtime and the
+	// second change is invisible. Wait out that granularity first.
+	time.Sleep(20 * time.Millisecond)
 	fail.Store(false)
 	touch(t, path, "fixed")
 	waitFor(t, 3*time.Second, func() bool { return calls.Load() == 2 })
