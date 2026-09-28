@@ -468,9 +468,31 @@ With no argument it lists every session you can reach. Sessions on a build older
 
 `gremlord setup` writes this workflow into `~/.claude/CLAUDE.md`, between `<!-- gremlord:peers:start -->` markers, so every session — gremlord-launched or plain `claude` — knows to resolve names this way. Re-running setup refreshes that block and leaves the rest of the file alone.
 
+## Gremlord Mesh (sessions on other machines)
+
+[Gremlord Mesh](https://github.com/gremlord/gremlord-mesh) connects sessions and humans across machines through a hub. Sessions message each other by project name ("labs-service on devbox"); humans follow a workspace feed, answer approvals, and stop runaway sessions from the CLI, a web UI, or Slack. Mesh is off unless you enable it; with it off, gremlord behaves exactly as before.
+
+```sh
+gremlord mesh join https://mesh.example.com <join-token> --name my-laptop
+# ~/.gremlord/config.yaml:
+#   mesh:
+#     enabled: true
+#     spawn: approve        # messages no session fits: allow | approve | deny
+gremlord mesh setup         # registers the mesh MCP server + hooks, adds CLAUDE.md guidance
+```
+
+From then on the process that holds the router port also runs the mesh leader. It:
+
+- routes incoming messages to the right local session;
+- answers a human `stop` with a synthetic end of turn, and cuts an in-flight stream at a safe point;
+- nudges sessions that have unread mail;
+- runs approved spawns through the router, so budgets and spend tracking apply to them.
+
+The statusline gains a mesh segment (hub status, unread mail, open channels). Headless machines stay on the mesh with `gremlord router run`. See the gremlord-mesh README for running a hub (a single binary, or `docker compose` with Postgres) and for the human commands (`gremlord mesh send/feed/approve/interrupt/trace …`).
+
 ## Works with clauder
 
-gremlord spawns `claude` directly and grants each session an auto-approved tool set for autonomous operation (`Read Write Edit Glob Grep Bash(*) WebFetch WebSearch mcp__clauder__*`). `--name` becomes claude's own session name.
+gremlord spawns `claude` directly and grants each session an auto-approved tool set for autonomous operation (`Read Write Edit Glob Grep Bash(*) WebFetch WebSearch mcp__clauder__* mcp__gremlord-mesh__*`). `--name` becomes claude's own session name.
 
 Cross-instance messaging is native to Claude Code — sessions register under `~/.claude/sessions` and reach each other over a peer socket — so gremlord no longer launches through `clauder wrap`. See [Finding another session](#finding-another-session) for addressing them. [clauder](https://github.com/MaorBril/clauder) remains a useful companion for **persistent memory**, which it provides over its own MCP server registration and therefore works no matter how the session was started. The two tools are independent; each works without the other.
 
@@ -492,6 +514,7 @@ Cross-instance messaging is native to Claude Code — sessions register under `~
 | `gremlord profiles list/show` · `gremlord budget set` | profiles and caps |
 | `gremlord config get/set` | any config key |
 | `gremlord router run/status` | headless router / who's leader |
+| `gremlord mesh join/setup/status/peers/send/feed/follow/interrupt/approvals/approve/trace/login` | Gremlord Mesh (see above) |
 | `gremlord doctor` | diagnose the installation |
 | `gremlord update [--check]` | update gremlord itself to the latest release |
 

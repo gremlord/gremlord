@@ -3,7 +3,7 @@ module github.com/gremlord/gremlord
 go 1.26.3
 
 require (
-	github.com/gremlord/gremlord-mesh v0.0.0
+	github.com/gremlord/gremlord-mesh v0.0.0-20260927234037-abd750f05b2a
 	github.com/mattn/go-isatty v0.0.24
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1
@@ -24,5 +24,3 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
-
-replace github.com/gremlord/gremlord-mesh => ../gremlord-mesh
