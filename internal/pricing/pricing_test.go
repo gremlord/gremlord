@@ -22,6 +22,16 @@ func TestEmbeddedPrices(t *testing.T) {
 	if _, priced := tbl.Cost("gpt-5.2", 1000, 1000, 0, 0); priced {
 		t.Error("unknown model should be unpriced")
 	}
+	// Keyed by the upstream model id, dashes included. A dotted key
+	// (claude-opus-5.5) is a different model to the lookup and would
+	// record every request as unpriced.
+	cost, priced = tbl.Cost("claude-opus-5-5", 1_000_000, 1_000_000, 1_000_000, 1_000_000)
+	if !priced || cost != 4+20+0.2+5 {
+		t.Errorf("opus 5.5 cost = %v priced=%v, want 29.2 true", cost, priced)
+	}
+	if _, priced := tbl.Cost("claude-opus-5.5", 1000, 1000, 0, 0); priced {
+		t.Error("dotted opus id should not match the dashed model id")
+	}
 }
 
 func TestConfigOverrides(t *testing.T) {
