@@ -147,3 +147,23 @@ func TestInjectGoalReminderBlockArraySystem(t *testing.T) {
 		t.Errorf("missing sentinel: %s", sys)
 	}
 }
+
+// Only the system value may change: the attribution block stays first with
+// its exact bytes, and fields the router doesn't know (safeguards) pass
+// through untouched, unsorted and unescaped.
+func TestInjectGoalReminderPreservesOtherBytes(t *testing.T) {
+	head := `{"model":"auto","system":[{"type":"text","text":"x-anthropic-billing-header: cc_version=2.1.283"},{"text":"<system-reminder>a & b</system-reminder>","type":"text"}]`
+	tail := `,"messages":[{"role":"user","content":"hi"}],"safeguards":{"zeta":1,"alpha":"<b>"}}`
+	out, err := injectGoalReminder([]byte(head+tail), "polling a build")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	prefix := strings.TrimSuffix(head, "]") + `,{"`
+	if !strings.HasPrefix(s, prefix) || !strings.HasSuffix(s, "}]"+tail) {
+		t.Errorf("bytes outside the appended block changed:\n%s", s)
+	}
+	if !strings.Contains(s, "<<autonomous-loop-dynamic>>") {
+		t.Errorf("reminder not appended unescaped:\n%s", s)
+	}
+}

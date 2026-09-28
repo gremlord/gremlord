@@ -60,14 +60,17 @@ func (b *Backend) forward(ctx context.Context, call *backend.Call, w http.Respon
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", call.Route.Provider.Key())
-	// Join rather than Get: a repeated anthropic-beta line would otherwise
-	// lose every value but the first, and these are load-bearing. Dropping
-	// advanced-tool-use-2025-11-20 while the conversation carries
-	// tool_reference blocks earns a 400 that persists for the rest of the
-	// session, since the blocks stay in history.
-	for _, h := range []string{"anthropic-version", "anthropic-beta"} {
-		if v := strings.Join(call.Header.Values(h), ","); v != "" {
-			req.Header.Set(h, v)
+	// Every anthropic-* header goes up, not an allowlist of the ones seen
+	// today: a capability pairs a beta header with a body field (server-side
+	// auto-mode review sends anthropic-beta plus `safeguards`), and a
+	// stripped header turns the next one off or into a 400. Join rather than
+	// Get: a repeated anthropic-beta line would otherwise lose every value
+	// but the first. Dropping advanced-tool-use-2025-11-20 while the
+	// conversation carries tool_reference blocks earns a 400 that persists
+	// for the rest of the session, since the blocks stay in history.
+	for h, vs := range call.Header {
+		if isAnthropicHeader(h) {
+			req.Header.Set(h, strings.Join(vs, ","))
 		}
 	}
 	if req.Header.Get("anthropic-version") == "" {
@@ -85,10 +88,15 @@ func (b *Backend) forward(ctx context.Context, call *backend.Call, w http.Respon
 	defer resp.Body.Close()
 
 	// Upstream responses (including errors) are already Anthropic-shaped;
-	// pass status, content headers, and body through unchanged.
-	for _, h := range []string{"Content-Type", "Cache-Control", "anthropic-ratelimit-requests-remaining", "retry-after", "request-id"} {
-		if v := resp.Header.Get(h); v != "" {
-			w.Header().Set(h, v)
+	// pass status, content headers, and body through unchanged. Claude Code
+	// reads anthropic-ratelimit-unified-* for plan-limit display and to tell
+	// a spend cap from a throttle on 429, and x-should-retry for its retry
+	// decision. Content-Length is left to net/http: scaling may resize the
+	// body.
+	for h, vs := range resp.Header {
+		switch {
+		case isAnthropicHeader(h), responseHeaders[http.CanonicalHeaderKey(h)]:
+			w.Header()[h] = append([]string(nil), vs...)
 		}
 	}
 	w.WriteHeader(resp.StatusCode)
@@ -155,6 +163,15 @@ func copySSEWithUsageTee(r io.Reader, w http.ResponseWriter, factor float64) ant
 		}
 	}
 	return usage
+}
+
+var responseHeaders = map[string]bool{
+	"Content-Type": true, "Cache-Control": true, "Retry-After": true,
+	"Request-Id": true, "X-Should-Retry": true,
+}
+
+func isAnthropicHeader(h string) bool {
+	return strings.HasPrefix(strings.ToLower(h), "anthropic-")
 }
 
 // errSnippet extracts a short error message from an Anthropic error body.
