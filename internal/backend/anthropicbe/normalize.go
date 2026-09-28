@@ -3,7 +3,10 @@ package anthropicbe
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"strings"
+
+	"github.com/gremlord/gremlord/internal/rawjson"
 )
 
 // rewriteForModel swaps the model field and normalizes capability-gated
@@ -11,16 +14,41 @@ import (
 // thinking/sampling config by pattern-matching the model NAME — an alias
 // like "auto" or "cheap" matches nothing, so it sends legacy parameters
 // that current Claude models reject.
+//
+// When normalization changes nothing but the model — the usual case for an
+// `auto` or tier alias resolving to a current Claude model — only the model
+// value is spliced, so the rest of the body (safeguards, cache_control,
+// system block order, escaping) reaches Anthropic byte-for-byte. Only a body
+// that genuinely needs repair is re-encoded.
 func rewriteForModel(raw []byte, model string) ([]byte, error) {
+	m, err := decodeRequest(raw)
+	if err != nil {
+		return nil, err
+	}
+	orig, _ := decodeRequest(raw)
+	m["model"] = model
+	orig["model"] = model
+	normalizeForModel(m, model)
+	if reflect.DeepEqual(m, orig) {
+		enc, err := rawjson.Marshal(model)
+		if err != nil {
+			return nil, err
+		}
+		if out, ok := rawjson.Replace(raw, enc, "model"); ok {
+			return out, nil
+		}
+	}
+	return rawjson.Marshal(m)
+}
+
+func decodeRequest(raw []byte) (map[string]any, error) {
 	var m map[string]any
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
 	if err := dec.Decode(&m); err != nil {
 		return nil, err
 	}
-	m["model"] = model
-	normalizeForModel(m, model)
-	return json.Marshal(m)
+	return m, nil
 }
 
 func normalizeForModel(m map[string]any, model string) {
@@ -41,6 +69,7 @@ func normalizeForModel(m map[string]any, model string) {
 
 	case strings.HasPrefix(model, "claude-opus-4-7"),
 		strings.HasPrefix(model, "claude-opus-4-8"),
+		strings.HasPrefix(model, "claude-opus-5"), // covers claude-opus-5-5
 		strings.HasPrefix(model, "claude-sonnet-5"):
 		// budget_tokens is removed on these models; adaptive is the only
 		// on-mode. Non-default sampling params are rejected.
@@ -67,15 +96,15 @@ func normalizeForModel(m map[string]any, model string) {
 			}
 		}
 	}
-	if !strings.HasPrefix(model, "claude-opus-4-8") {
-		// Mid-conversation system messages are Opus 4.8-only; fold them
-		// into the preceding user turn so tier switches don't 400.
+	if !supportsSystemMessages(model) {
+		// Fold mid-conversation system messages into the preceding user
+		// turn so tier switches to an older model don't 400. Models that
+		// accept them get the history untouched — folding rewrites earlier
+		// turns, which forces a re-encode and can break preserved thinking.
 		foldSystemMessages(m)
 	}
 }
 
-// supportsEffort reports whether the model accepts output_config.effort
-// (Opus 4.5+, Sonnet 4.6+, Fable/Mythos; Haiku and older Sonnets reject it).
 // hasInvalidToolID reports whether raw request history contains a tool id
 // outside Anthropic's accepted character set. It intentionally parses only
 // the small envelope needed to preserve byte-faithful passthrough for clean
@@ -244,10 +273,25 @@ func validToolIDRune(r rune) bool {
 	return r == '_' || r == '-' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
 }
 
+// supportsSystemMessages reports whether the model accepts role "system"
+// entries inside messages[]. Verified against the API 2026-09-28: Opus 5.5,
+// Sonnet 5, and Fable 5.1 accept them; Haiku 4.5 rejects them.
+func supportsSystemMessages(model string) bool {
+	for _, prefix := range []string{"claude-opus-4-8", "claude-opus-5", "claude-sonnet-5", "claude-fable"} {
+		if strings.HasPrefix(model, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// supportsEffort reports whether the model accepts output_config.effort
+// (Opus 4.5+, Sonnet 4.6+, Fable/Mythos; Haiku and older Sonnets reject it).
 func supportsEffort(model string) bool {
 	for _, prefix := range []string{
 		"claude-fable", "claude-mythos",
 		"claude-opus-4-5", "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8",
+		"claude-opus-5", // covers claude-opus-5-5
 		"claude-sonnet-4-6", "claude-sonnet-5",
 	} {
 		if strings.HasPrefix(model, prefix) {
@@ -265,7 +309,7 @@ func foldSystemMessages(m map[string]any) {
 	if !ok {
 		return
 	}
-	var out []any
+	out := make([]any, 0, len(msgs))
 	for _, raw := range msgs {
 		msg, ok := raw.(map[string]any)
 		if !ok || msg["role"] != "system" {

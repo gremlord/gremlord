@@ -281,6 +281,14 @@ func (s *Server) recordUsage(r *http.Request, route config.Resolved, alias strin
 		// Even when the optional CLI model ID happens to match an entry in the
 		// API price table, subscription spend is opaque to gremlord.
 		cost, priced = 0, false
+	} else if !priced && res.Status < 400 {
+		// A paid provider with no price entry records cost_usd=0, which the
+		// budget gate then treats as free: the request is metered but the
+		// spend is invisible. The usual cause is a pricing key that doesn't
+		// match the upstream model id (claude-opus-5.5 vs claude-opus-5-5).
+		s.log.Warn("unpriced model; spend untracked and outside the budget gate",
+			"model", alias, "upstream", route.Model.ID,
+			"in", u.InputTokens, "out", u.OutputTokens)
 	}
 	budget := route.Model.ContextBudget()
 	ev := store.UsageEvent{

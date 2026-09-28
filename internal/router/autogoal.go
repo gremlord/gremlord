@@ -10,6 +10,7 @@ import (
 
 	"github.com/gremlord/gremlord/internal/anthropic"
 	"github.com/gremlord/gremlord/internal/config"
+	"github.com/gremlord/gremlord/internal/rawjson"
 )
 
 // goalRouter runs a second, independent classification pass over each new
@@ -123,33 +124,64 @@ ignore it for tasks that finish in one pass.
 </system-reminder>`
 
 // injectGoalReminder appends the goal-loop reminder to the request's system
-// prompt, preserving every other byte-equivalent field (numbers survive via
-// json.Number, same as backend.RewriteModel). The "system" field may be
-// absent, a plain string, or a content-block array — all three are folded
-// into the block-array form with the reminder appended, matching the shape
-// Claude Code's own <system-reminder> blocks already arrive in.
+// prompt. The "system" field may be absent, a plain string, or a
+// content-block array — all three become the block-array form with the
+// reminder appended, matching the shape Claude Code's own <system-reminder>
+// blocks already arrive in. Only the system value is rewritten, and existing
+// blocks keep their exact bytes (the attribution block stays first and
+// unchanged); every other field — safeguards included — passes through as
+// received.
 func injectGoalReminder(raw []byte, reason string) ([]byte, error) {
-	var m map[string]any
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.UseNumber()
-	if err := dec.Decode(&m); err != nil {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
 		return nil, err
 	}
-	reminder := map[string]any{"type": "text", "text": fmt.Sprintf(goalReminderTemplate, reason)}
-
-	var blocks []any
-	switch sys := m["system"].(type) {
-	case nil:
-		// absent
-	case string:
-		if sys != "" {
-			blocks = append(blocks, map[string]any{"type": "text", "text": sys})
-		}
-	case []any:
-		blocks = sys
-	default:
-		return nil, fmt.Errorf("unexpected system field type %T", sys)
+	reminder, err := rawjson.Marshal(map[string]any{"type": "text", "text": fmt.Sprintf(goalReminderTemplate, reason)})
+	if err != nil {
+		return nil, err
 	}
-	m["system"] = append(blocks, reminder)
-	return json.Marshal(m)
+
+	var blocks [][]byte
+	sys, present := m["system"]
+	if present && string(sys) != "null" {
+		var text string
+		var arr []json.RawMessage
+		switch {
+		case json.Unmarshal(sys, &text) == nil:
+			if text != "" {
+				b, err := rawjson.Marshal(map[string]any{"type": "text", "text": text})
+				if err != nil {
+					return nil, err
+				}
+				blocks = append(blocks, b)
+			}
+		case json.Unmarshal(sys, &arr) == nil:
+			for _, b := range arr {
+				blocks = append(blocks, b)
+			}
+		default:
+			return nil, fmt.Errorf("unexpected system field %.40s", sys)
+		}
+	}
+	value := append(append([]byte("["), bytes.Join(append(blocks, reminder), []byte(","))...), ']')
+
+	if present {
+		if out, ok := rawjson.Replace(raw, value, "system"); ok {
+			return out, nil
+		}
+		return nil, fmt.Errorf("system field not addressable")
+	}
+	// Absent: insert as the first key, leaving the rest of the body intact.
+	open := bytes.IndexByte(raw, '{')
+	if open < 0 {
+		return nil, fmt.Errorf("request body is not an object")
+	}
+	out := make([]byte, 0, len(raw)+len(value)+12)
+	out = append(out, raw[:open+1]...)
+	out = append(out, `"system":`...)
+	out = append(out, value...)
+	if len(m) > 0 {
+		out = append(out, ',')
+	}
+	return append(out, raw[open+1:]...), nil
 }

@@ -3,7 +3,9 @@ package anthropicbe
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 
+	"github.com/gremlord/gremlord/internal/rawjson"
 	"github.com/gremlord/gremlord/internal/tokens"
 )
 
@@ -19,24 +21,28 @@ import (
 //   - an anthropic model declares effective_context, forcing compaction
 //     before a real Claude window is full.
 //
-// Even then only the three input-side usage counters are touched, via a
-// generic map so every neighbouring field round-trips as written.
+// Even then only the three input-side usage counters are touched, spliced
+// in place by byte offset so every neighbouring byte — key order, escaping,
+// safeguard_results and whatever ships next — reaches the client as sent.
 
-// scaleUsageMap rewrites the input-side counters of a decoded usage
-// object in place. Values arrive as json.Number; anything unparseable is
-// left exactly as found.
-func scaleUsageMap(usage map[string]any, factor float64) {
-	for _, field := range []string{"input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"} {
-		n, ok := usage[field].(json.Number)
+var inputCounters = []string{"input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"}
+
+// scaleCounters rewrites the input-side counters of the usage object at
+// path. Counters that are absent or not integers are left exactly as found.
+func scaleCounters(data []byte, factor float64, path ...string) []byte {
+	for _, field := range inputCounters {
+		p := append(append([]string{}, path...), field)
+		s, e, ok := rawjson.Span(data, p...)
 		if !ok {
 			continue
 		}
-		v, err := n.Int64()
+		v, err := strconv.ParseInt(string(data[s:e]), 10, 64)
 		if err != nil {
 			continue
 		}
-		usage[field] = tokens.ScaleCount(v, factor)
+		data, _ = rawjson.Replace(data, strconv.AppendInt(nil, tokens.ScaleCount(v, factor), 10), p...)
 	}
+	return data
 }
 
 // scaleResponseBody rewrites usage in a non-streaming Messages response.
@@ -46,20 +52,7 @@ func scaleResponseBody(body []byte, factor float64) []byte {
 	if factor == 1 {
 		return body
 	}
-	var m map[string]any
-	if err := decodeNumbers(body, &m); err != nil {
-		return body
-	}
-	usage, ok := m["usage"].(map[string]any)
-	if !ok {
-		return body
-	}
-	scaleUsageMap(usage, factor)
-	out, err := json.Marshal(m)
-	if err != nil {
-		return body
-	}
-	return out
+	return scaleCounters(body, factor, "usage")
 }
 
 // scaleSSEData rewrites usage in one SSE `data:` payload, returning the
@@ -70,31 +63,11 @@ func scaleSSEData(data []byte, factor float64) []byte {
 	if factor == 1 || !bytes.Contains(data, []byte(`"usage"`)) {
 		return data
 	}
-	var m map[string]any
-	if err := decodeNumbers(data, &m); err != nil {
+	var ev struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal(data, &ev) != nil || ev.Type != "message_start" {
 		return data
 	}
-	if t, _ := m["type"].(string); t != "message_start" {
-		return data
-	}
-	msg, ok := m["message"].(map[string]any)
-	if !ok {
-		return data
-	}
-	usage, ok := msg["usage"].(map[string]any)
-	if !ok {
-		return data
-	}
-	scaleUsageMap(usage, factor)
-	out, err := json.Marshal(m)
-	if err != nil {
-		return data
-	}
-	return out
-}
-
-func decodeNumbers(b []byte, v any) error {
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.UseNumber()
-	return dec.Decode(v)
+	return scaleCounters(data, factor, "message", "usage")
 }
